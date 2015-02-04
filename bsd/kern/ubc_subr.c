@@ -131,16 +131,6 @@ cs_valid_range(
 	const void __unused *lower_bound,
 	const void __unused *upper_bound)
 {
-	/*if (upper_bound < lower_bound ||
-	    end < start) {
-		return FALSE;
-	}
-
-	if (start < lower_bound ||
-	    end > upper_bound) {
-		return FALSE;
-	}*/
-
 	return TRUE;
 }
 
@@ -3417,176 +3407,6 @@ cs_validate_page(
 	const void __unused	*data,
 	boolean_t	*tainted)
 {
-	/*SHA1_CTX		sha1ctxt;
-	unsigned char		actual_hash[SHA1_RESULTLEN];
-	unsigned char		expected_hash[SHA1_RESULTLEN];
-	boolean_t		found_hash;
-	struct cs_blob		*blobs, *blob;
-	const CS_CodeDirectory	*cd;
-	const CS_SuperBlob	*embedded;
-	const unsigned char	*hash;
-	boolean_t		validated;
-	off_t			offset;	// page offset in the file
-	size_t			size;
-	off_t			codeLimit = 0;
-	char			*lower_bound, *upper_bound;
-	vm_offset_t		kaddr, blob_addr;
-	vm_size_t		ksize;
-	kern_return_t		kr;
-
-	offset = page_offset;
-
-	// retrieve the expected hash
-	found_hash = FALSE;
-	blobs = (struct cs_blob *) _blobs;
-
-	for (blob = blobs;
-	     blob != NULL;
-	     blob = blob->csb_next) {
-		offset = page_offset - blob->csb_base_offset;
-		if (offset < blob->csb_start_offset ||
-		    offset >= blob->csb_end_offset) {
-			// our page is not covered by this blob
-			continue;
-		}
-
-		// map the blob in the kernel address space
-		kaddr = blob->csb_mem_kaddr;
-		if (kaddr == 0) {
-			ksize = (vm_size_t) (blob->csb_mem_size +
-					     blob->csb_mem_offset);
-			kr = vm_map(kernel_map,
-				    &kaddr,
-				    ksize,
-				    0,
-				    VM_FLAGS_ANYWHERE,
-				    blob->csb_mem_handle,
-				    0,
-				    TRUE,
-				    VM_PROT_READ,
-				    VM_PROT_READ,
-				    VM_INHERIT_NONE);
-			if (kr != KERN_SUCCESS) {
-				// XXX FBDP what to do !?
-				printf("cs_validate_page: failed to map blob, "
-				       "size=0x%lx kr=0x%x\n",
-				       (size_t)blob->csb_mem_size, kr);
-				break;
-			}
-		}
-		if (blob->csb_sigpup && cs_debug)
-			printf("checking for a sigpup CD\n");
-
-		blob_addr = kaddr + blob->csb_mem_offset;
-		
-		lower_bound = CAST_DOWN(char *, blob_addr);
-		upper_bound = lower_bound + blob->csb_mem_size;
-
-		embedded = (const CS_SuperBlob *) blob_addr;
-		cd = findCodeDirectory(embedded, lower_bound, upper_bound);
-		if (cd != NULL) {
-			if (cd->pageSize != PAGE_SHIFT_4K ||
-			    cd->hashType != CS_HASHTYPE_SHA1 ||
-			    cd->hashSize != SHA1_RESULTLEN) {
-				// bogus blob ?
-				if (blob->csb_sigpup && cs_debug)
-					printf("page foo bogus sigpup CD\n");
-				continue;
-			}
-
-			offset = page_offset - blob->csb_base_offset;
-			if (offset < blob->csb_start_offset ||
-			    offset >= blob->csb_end_offset) {
-				// our page is not covered by this blob
-				if (blob->csb_sigpup && cs_debug)
-					printf("OOB sigpup CD\n");
-				continue;
-			}
-
-			codeLimit = ntohl(cd->codeLimit);
-			if (blob->csb_sigpup && cs_debug)
-				printf("sigpup codesize %d\n", (int)codeLimit);
-
-			hash = hashes(cd, (unsigned)(offset>>PAGE_SHIFT_4K),
-				      lower_bound, upper_bound);
-			if (hash != NULL) {
-				bcopy(hash, expected_hash,
-				      sizeof (expected_hash));
-				found_hash = TRUE;
-				if (blob->csb_sigpup && cs_debug)
-					printf("sigpup hash\n");
-			}
-
-			break;
-		} else {
-			if (blob->csb_sigpup && cs_debug)
-				printf("sig pup had no valid CD\n");
-
-		}
-	}
-
-	if (found_hash == FALSE) {
-		//
-        // We can't verify this page because there is no signature
-        // for it (yet).  It's possible that this part of the object
-        // is not signed, or that signatures for that part have not
-        // been loaded yet.
-        // Report that the page has not been validated and let the
-        // caller decide if it wants to accept it or not.
-        //
-		cs_validate_page_no_hash++;
-		if (cs_debug > 1) {
-			printf("CODE SIGNING: cs_validate_page: "
-			       "mobj %p off 0x%llx: no hash to validate !?\n",
-			       pager, page_offset);
-		}
-		validated = FALSE;
-		*tainted = FALSE;
-	} else {
-
-		size = PAGE_SIZE_4K;
-		const uint32_t *asha1, *esha1;
-		if ((off_t)(offset + size) > codeLimit) {
-			// partial page at end of segment
-			assert(offset < codeLimit);
-			size = (size_t) (codeLimit & PAGE_MASK_4K);
-		}
-		// compute the actual page's SHA1 hash
-		SHA1Init(&sha1ctxt);
-		SHA1UpdateUsePhysicalAddress(&sha1ctxt, data, size);
-		SHA1Final(actual_hash, &sha1ctxt);
-
-		asha1 = (const uint32_t *) actual_hash;
-		esha1 = (const uint32_t *) expected_hash;
-
-		if (bcmp(expected_hash, actual_hash, SHA1_RESULTLEN) != 0) {
-			if (cs_debug) {
-				printf("CODE SIGNING: cs_validate_page: "
-				       "mobj %p off 0x%llx size 0x%lx: "
-				       "actual [0x%x 0x%x 0x%x 0x%x 0x%x] != "
-				       "expected [0x%x 0x%x 0x%x 0x%x 0x%x]\n",
-				       pager, page_offset, size,
-				       asha1[0], asha1[1], asha1[2],
-				       asha1[3], asha1[4],
-				       esha1[0], esha1[1], esha1[2],
-				       esha1[3], esha1[4]);
-			}
-			cs_validate_page_bad_hash++;
-			*tainted = TRUE;
-		} else {
-			if (cs_debug > 10) {
-				printf("CODE SIGNING: cs_validate_page: "
-				       "mobj %p off 0x%llx size 0x%lx: "
-				       "SHA1 OK\n",
-				       pager, page_offset, size);
-			}
-			*tainted = FALSE;
-		}
-		validated = TRUE;
-	}
-	
-	return validated;*/
-
     *tainted = FALSE;
     return TRUE;
 }
@@ -3651,30 +3471,6 @@ ubc_cs_validation_bitmap_allocate(
 	__unused vnode_t		vp)
 {
 	kern_return_t	kr = KERN_SUCCESS;
-	/*struct ubc_info *uip;
-	char		*target_bitmap;
-	vm_object_size_t	bitmap_size;
-
-	if ( ! USE_CODE_SIGN_BITMAP(vp) || (! UBCINFOEXISTS(vp))) {
-		kr = KERN_INVALID_ARGUMENT;
-	} else {
-		uip = vp->v_ubcinfo;
-
-		if ( uip->cs_valid_bitmap == NULL ) {
-			bitmap_size = stob(uip->ui_size);
-			target_bitmap = (char*) kalloc( (vm_size_t)bitmap_size );
-			if (target_bitmap == 0) {
-				kr = KERN_NO_SPACE;
-			} else {
-				kr = KERN_SUCCESS;
-			}
-			if( kr == KERN_SUCCESS ) {
-				memset( target_bitmap, 0, (size_t)bitmap_size);
-				uip->cs_valid_bitmap = (void*)target_bitmap;
-				uip->cs_valid_bitmap_size = bitmap_size;
-			}
-		}
-	}*/
 	return kr;
 }
 
@@ -3685,40 +3481,6 @@ __unused	memory_object_offset_t		offset,
 __unused	int			optype)
 {
 	kern_return_t	kr = KERN_SUCCESS;
-
-	/*if ( ! USE_CODE_SIGN_BITMAP(vp) || ! UBCINFOEXISTS(vp)) {
-		kr = KERN_INVALID_ARGUMENT;
-	} else {
-		struct ubc_info *uip = vp->v_ubcinfo;
-		char		*target_bitmap = uip->cs_valid_bitmap;
-
-		if ( target_bitmap == NULL ) {
-		       kr = KERN_INVALID_ARGUMENT;
-		} else {
-			uint64_t	bit, byte;
-			bit = atop_64( offset );
-			byte = bit >> 3;
-
-			if ( byte > uip->cs_valid_bitmap_size ) {
-			       kr = KERN_INVALID_ARGUMENT;
-			} else {
-
-				if (optype == CS_BITMAP_SET) {
-					target_bitmap[byte] |= (1 << (bit & 07));
-					kr = KERN_SUCCESS;
-				} else if (optype == CS_BITMAP_CLEAR) {
-					target_bitmap[byte] &= ~(1 << (bit & 07));
-					kr = KERN_SUCCESS;
-				} else if (optype == CS_BITMAP_CHECK) {
-					if ( target_bitmap[byte] & (1 << (bit & 07))) {
-						kr = KERN_SUCCESS;
-					} else {
-						kr = KERN_FAILURE;
-					}
-				}
-			}
-		}
-	}*/
 	return kr;
 }
 
@@ -3726,19 +3488,6 @@ void
 ubc_cs_validation_bitmap_deallocate(
 	__unused vnode_t		vp)
 {
-	/*struct ubc_info *uip;
-	void		*target_bitmap;
-	vm_object_size_t	bitmap_size;
-
-	if ( UBCINFOEXISTS(vp)) {
-		uip = vp->v_ubcinfo;
-
-		if ( (target_bitmap = uip->cs_valid_bitmap) != NULL ) {
-			bitmap_size = uip->cs_valid_bitmap_size;
-			kfree( target_bitmap, (vm_size_t) bitmap_size );
-			uip->cs_valid_bitmap = NULL;
-		}
-	}*/
 }
 #else
 kern_return_t	ubc_cs_validation_bitmap_allocate(__unused vnode_t vp){

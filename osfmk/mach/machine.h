@@ -402,7 +402,6 @@ __END_DECLS
 #define CPUFAMILY_ARM_15		0xa8511bca
 #define CPUFAMILY_ARM_SWIFT 		0x1e2d6381
 #define CPUFAMILY_ARM_CYCLONE		0x37a09642
-#define CPUFAMILY_AMD           	0x78ea4fbc
 
 /* The following synonyms are deprecated: */
 #define CPUFAMILY_INTEL_6_14	CPUFAMILY_INTEL_YONAH

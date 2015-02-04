@@ -249,18 +249,9 @@ commpage_init_cpu_capabilities( void )
 		default:
 			break;
 	}
+
 	cpus = commpage_cpus();			// how many CPUs do we have
-/*
-	if (IsAmdCPU()) {
-		bits |= kHasSSE4_2;
-		bits &= ~kHasSupplementalSSE3;
-#define MAVERICKS_AMD
-#ifdef MAVERICKS_AMD
-		bits |= kHasSSE3;
-		bits &= ~kHasSSE4_2;
-#endif
-	}
-*/
+
 	bits |= (cpus << kNumCPUsShift);
 
 	bits |= kFastThreadLocalStorage;	// we use %gs for TLS

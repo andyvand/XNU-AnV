@@ -759,20 +759,10 @@ FALL_THROUGH:
 		 *
 		 * fall through...
 		 */
-		//case T_INVALID_OPCODE:
-		//{
-			/* Sinetek: we'll handle this. */
-			//if(opemu_ktrap(state))
-			//return;
-		//}
-
+		case T_INVALID_OPCODE:
+			opemu_ktrap(state);
+			return;
 	    default:
-
-			if (type == T_INVALID_OPCODE)
-			{
-				if (opemu_ktrap(state))
-					return;
-			}
 		/*
 		 * Exception 15 is reserved but some chips may generate it
 		 * spuriously. Seen at startup on AMD Athlon-64.
@@ -877,52 +867,6 @@ panic_trap(x86_saved_state64_t *regs)
 extern kern_return_t dtrace_user_probe(x86_saved_state_t *);
 #endif
 
-#include <kern/sched_prim.h>
-extern void mach_call_munger(x86_saved_state_t *state);
-extern void unix_syscall(x86_saved_state_t *);
-
-void opemu_sysenter(x86_saved_state_t *saved_state);
-void opemu_sysenter(x86_saved_state_t *saved_state)
-{
-    
-	//printf("wow");
-	if (is_saved_state32(saved_state))
-    {
-        
-        vm_offset_t addr;
-        
-        //uint64_t op = saved_state->eip;
-        //uint8_t *buffer = (uint8_t*)op;
-        
-		x86_saved_state32_t *regs;
-        regs = saved_state32(saved_state);
-		
-		//copyin(regs->eip, (char*) buffer, 15);
-		
-        addr = regs->eip;
-        
-        uint16_t opcode = *(uint16_t *) addr;
-
-		if (opcode == 0x340f)
-		{
-			
-			regs->eip = regs->edx;
-			regs->uesp = regs->ecx;
-			
-			if((signed int)regs->eax < 0) {
-				//      printf("mach call 64\n");
-				mach_call_munger(saved_state);
-			} else {
-				//      printf("unix call 64\n");
-				unix_syscall(saved_state);
-			}
-			return;
-		}
-        
-	}
-    
-}
-
 /*
  *	Trap from user mode.
  */
@@ -996,10 +940,6 @@ user_trap(
 	kprintf("user_trap(0x%08x) type=%d vaddr=0x%016llx\n",
 		saved_state, type, vaddr);
 #endif
-
-    if((type != 3) && (type != 6) && (type != 7) && (type != T_PAGE_FAULT)) {
-   		printf("ERROR: user_trap(0x%08x) type=%d vaddr=0x%016llx\n", (unsigned int)saved_state, type, vaddr);
-   	}
 
 	perfASTCallback astfn = perfASTHook;
 	if (__improbable(astfn != NULL)) {
@@ -1081,12 +1021,9 @@ user_trap(
 		code = EXC_I386_BOUND;
 		break;
 
-		case T_INVALID_OPCODE:
-		/* Sinetek: we'll handle this. */
-		opemu_sysenter(saved_state);
-		opemu_utrap(saved_state);
-
-        exc = EXC_BAD_INSTRUCTION;
+	    case T_INVALID_OPCODE:
+	    opemu_utrap(saved_state);
+		exc = EXC_BAD_INSTRUCTION;
 		code = EXC_I386_INVOP;
 		break;
 

@@ -523,7 +523,7 @@ sysctl_mib_init(void)
 	/* hw.cpufamily */
 	cpufamily = cpuid_cpufamily();
 
-	if (!strcmp(info_p->cpuid_vendor,CPUID_VID_INTEL)
+	if (IsIntelCPU()
         &&
         /* Pentium M or higher */
         (( (cpuid_info()->cpuid_family == CPU_FAMILY_PENTIUM_M) && (cpuid_info()->cpuid_model >= 14) ) ||

@@ -95,7 +95,7 @@ typedef union
     ssp_s8  s8 [ 8];    
 } ssp_m64;
 
-#define MAX_U16 (ssp_u16)65535
+ssp_u16 MAX_U16 = 65535;
 
 //---------------------------------------
 // Rounding mode macros

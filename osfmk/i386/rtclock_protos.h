@@ -44,10 +44,6 @@
 #define	RTCLOCK_SCALE_UP_BY	(1 << RTCLOCK_SCALE_UP_BITS)
 #define	RTCLOCK_SCALE_UP_MASK	(RTCLOCK_SCALE_UP_BY - 1)
 
-extern uint64_t cpuRealFreq(void);
-extern uint64_t timeRDTSC(void);
-extern uint64_t cpuFreq(void);
-
 typedef struct pal_rtc_nanotime pal_rtc_nanotime_t;
 extern uint64_t tsc_rebase_abs_time;
 

@@ -34,7 +34,7 @@ else
 	XCRUN = /usr/bin/xcrun
 endif
 
-SDKROOT ?= macosx.internal
+SDKROOT ?= /
 HOST_SDKROOT ?= macosx
 HOST_SPARSE_SDKROOT ?= /
 

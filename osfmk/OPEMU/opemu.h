@@ -1,52 +1,43 @@
-#pragma once
-
+#ifndef OPEMU_H
+#define OPEMU_H
 #include <stdint.h>
-#include <kern/sched_prim.h>
-#include "libudis86/extern.h"
 
-struct op {
-	// one of either. order here matters.
-	union {
-		x86_saved_state64_t *state64;
-		x86_saved_state32_t *state32;
-	};
+#ifndef TESTCASE
+#include <mach/thread_status.h>
+#endif
 
-	enum {
-		SAVEDSTATE_64,
-		SAVEDSTATE_32,
-	} state_flavor;
+#define __SSEPLUS_CPUID_H__ 1
+#define __SSEPLUS_EMULATION_COMPS_SSE3_H__ 1
 
-	// just another version of the above
-	x86_saved_state_t *state;
+#include <SSEPlus/SSEPlus_base.h>
+#include <SSEPlus/SSEPlus_REF.h>
+#include <SSEPlus/SSEPlus_SSE2.h>
 
-	// disassembly object
-	ud_t		*ud_obj;
+#ifndef TESTCASE
+/** XNU TRAP HANDLERS **/
+unsigned char opemu_ktrap(x86_saved_state_t *state);
+void opemu_utrap(x86_saved_state_t *state);
+int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int);
+int sse3_run_a(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
+int sse3_run_b(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
+int sse3_run_c(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
+int monitor_mwait_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap);
+int fisttp_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap);
+int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, void *dst,
+				  unsigned int longmode, x86_saved_state_t *saved_state, int kernel_trap, int size_128);
+void storeresult128(uint8_t ModRM, unsigned int hdst, ssp_m128 res);
+void storeresult64(uint8_t ModRM, unsigned int hdst, ssp_m64 res);
+#endif
 
-	// boolean flag
-	uint8_t		ring0;
-};
-typedef struct op op_t;
+void print_bytes(uint8_t *from, int size);
 
-/**
- * Trap handlers, analogous to a program's entry point
- * @param state: xnu's trap.c saved thread state
- */
-int opemu_ktrap(x86_saved_state_t *state);
-unsigned char opemu_utrap(x86_saved_state_t *state);
+void getxmm(ssp_m128 *v, unsigned int i);
+void getmm(ssp_m64 *v, unsigned int i);
+void movxmm(ssp_m128 *v, unsigned int i);
+void movmm(ssp_m64 *v, unsigned int i);
 
-/**
- * Forward declarations of private xnu functions
- */
-extern void mach_call_munger(x86_saved_state_t *state);
-extern void unix_syscall(x86_saved_state_t *);
-extern void mach_call_munger64(x86_saved_state_t *state);
-extern void unix_syscall64(x86_saved_state_t *);
+short fisttps(float *res);
+int fisttpl(double *res);
+long long fisttpq(long double *res);
 
-int retrieve_reg(/*const*/ x86_saved_state_t *, const ud_type_t, uint64_t *);
-
-/**
- * Entry points for the "plugins"
- */
-extern int op_sse3x_run(const op_t*);
-extern int op_sse3_run(const op_t*);
-
+#endif

@@ -280,8 +280,8 @@ L_dispatch_U32_after_fault:
 L_common_dispatch:
 	cld		/* Ensure the direction flag is clear in the kernel */
 	cmpl    $0, EXT(pmap_smap_enabled)(%rip)
-	je	1f
-	clac		/* Clear EFLAGS.AC if SMAP is present/enabled */
+	jmp	1f
+	/* clac */		/* Clear EFLAGS.AC if SMAP is present/enabled */
 1:
 	/*
 	 * On entering the kernel, we don't need to switch cr3
@@ -1433,23 +1433,3 @@ Entry(hndl_machine_check)
 Entry(hndl_double_fault)
 	CCALL1(panic_double_fault64, %r15)
 	hlt
-
-Entry(idt64_fake_sysenter)
-	swapgs				/* switch to kernel gs (cpu_data) */
-	pushq	%rax			/* save system call number */
-	PUSH_FUNCTION(HNDL_SYSENTER)
-	pushq	$(UNIX_INT)
-	jmp	L_32bit_entry_check
-
-Entry(idt64_fake_cpuid)
-	pushf
-	testl %eax, %eax		// cpuid only checks the lower dword of rax
-	cpuid
-	jnz 2f
-1:
-	movq $0x756e6547, %rbx		// results, however, are zero-extended to qword size
-	movq $0x49656e69, %rdx
-	movq $0x6c65746e, %rcx
-2:
-	popf
-	iretq				// operand size is *very* important here

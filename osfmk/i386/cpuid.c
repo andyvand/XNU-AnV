@@ -639,8 +639,7 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
 {
     if (IsAmdCPU())
     {
-        uint32_t	reg[4];
-        uint32_t        cpuid_result[4];
+        uint32_t	reg[4] = {0, 0, 0, 0};
         uint32_t	cache_level;
 
         uint32_t	cache_sharing;
@@ -660,142 +659,125 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
         bzero( linesizes, sizeof(linesizes) );
 
         uint32_t    cores;
-        boolean_t	cpuid_deterministic_supported = FALSE;
 
         cpuid_fn(0x80000008, reg);
         cores = (reg[ecx] & 0xff) + 1;
         info_p->cpuid_cores_per_package = cores;
 
+        cpuid_fn(0x80000006, reg) ;
+
         //uint32_t L2ULinesPerTag = bitfield(reg[ecx], 11, 8);
-        //uint32_t L3ULinesPerTag = bitfield(reg[edx], 11, 8);
-        int i=0;
+        uint32_t L3ULinesPerTag = bitfield(reg[edx], 11, 8);
 
         /* CPU Family L123 Cache Start */
         switch (info_p->cpuid_family)
         {
-            /* K10 Family Start */
+            /* K8 Family Start */
             case K8_FAMILY:
             {
+                int i=0;
                 for ( i = 1; i<4 ; i++)
                 {
                     switch (i)
                     {
-                        case 1: /* L1 Data */
-                        {
-                            cache_level = 1;
-                            cache_type = 1;
-                            
-                            type = cache_type == 1 ? L1D :
-                            Lnone;
+                        case 1:
+                            type  = 1 == 1 ? L1D : Lnone;
 
                             if(type == L1D)
                             {
+                                cache_level = 1;
                                 cpuid_fn(0x80000005, reg) ;
 
-                                cache_size =   bitfield(reg[ecx],31,24) * 1024;
                                 cache_linesize = bitfield(reg[ecx],7,0);
                                 cache_associativity = bitfield(reg[ecx],23,16);
-                                cache_partitions = bitfield32(reg[ecx], 15, 8);
-                                
-                                cache_sets = cache_size / (cache_partitions * cache_linesize * cache_associativity);
+                                cache_size =   bitfield(reg[ecx],31,24) * 1024;
+                                cache_sets = cache_size / (cache_associativity * cache_linesize);
                                 linesizes[L1D] = cache_linesize;
                                 info_p->cache_linesize = linesizes[L1D];
                                 info_p->cache_size[L1D]	= cache_size;
                                 info_p->cache_sharing[L1D] = cache_sharing = 1;
-                                info_p->cache_partitions[type] = cache_partitions;
+
+                                //printf("cache_sizes %d \n", cache_size);
 
                                 colors = ( cache_linesize * cache_sets ) >> 12;
 
                                 if ( colors > vm_cache_geometry_colors )
                                     vm_cache_geometry_colors = colors ;
                             }
-                        }
                         break;
 
-                        case 2: /* L1 Inst */
-                        {
-                            cache_level = 1;
-                            cache_type = 2;
-                            type = cache_type == 2 ? L1I :
-                            Lnone;
+                        case 2:
+                            type = 2 == 2 ? L1I : Lnone;
 
                             if(type == L1I)
                             {
-                                cpuid_fn(0x80000005, reg);
+
+                                cache_level = 1;
+                                cpuid_fn(0x80000005, reg) ;
 
                                 cache_size = bitfield(reg[edx],31,24) * 1024;
                                 cache_linesize = bitfield(reg[edx],7,0);
                                 cache_associativity = bitfield(reg[edx],23,16);
-                                cache_partitions = bitfield32(reg[edx], 15, 8);
+                                cache_sets = cache_size / (cache_associativity * cache_linesize);
+                                linesizes[type] = cache_linesize;
+                                info_p->cache_linesize = linesizes[type];
+                                info_p->cache_size[type]	= cache_size;
+                                info_p->cache_sharing[type] = cache_sharing = 2;
 
-                                cache_sets = cache_size / (cache_partitions *cache_linesize * cache_associativity );
-                                
-                                linesizes[L1I] = cache_linesize;
-                                info_p->cache_linesize = linesizes[L1I];
-                                info_p->cache_size[L1I]	= cache_size;
-                                info_p->cache_sharing[L1I] = cache_sharing = 1;
-                                info_p->cache_partitions[type] = cache_partitions;
+                                //printf("cache_size %d \n", cache_size);
 
                                 colors = ( cache_linesize * cache_sets ) >> 12;
 
                                 if ( colors > vm_cache_geometry_colors )
                                     vm_cache_geometry_colors = colors ;
                             }
-                        }
                         break;
 
-                        case 3: /* Level 2 */
-                        {
-                            cache_level = 2;
-                            cache_type = 3;
-                            type = cache_type == 3 ? L2U :
-                            Lnone;
+                        case 3:
+                            type = 3 == 3 ? L2U : Lnone;
 
                             if(type == L2U)
                             {
                                 /* L2 cache is in KB units, reported per-core */
-                                cpuid_fn(0x80000006, reg);
+                                cpuid_fn(0x80000006, reg) ;
 
                                 cache_size = bitfield(reg[ecx],31,16) * 1024;
                                 cache_linesize = bitfield(reg[ecx],7,0);
                                 cache_associativity = amdGetAssociativity(extractBitField(reg[ecx],4,12));
 
-                                cache_partitions = bitfield32(reg[ecx], 11, 8);
+                                info_p->cache_linesize = cache_linesize;
+                                linesizes[type] = info_p->cpuid_cache_linesize;
 
-                                cache_sets = cache_size / (cache_partitions *cache_linesize * cache_associativity );
-                                if(cache_size == 0)
+                                if (cache_level > 1)
                                 {
-                                    // no L3
-                                    info_p->cache_size[type]  	= 0;
-                                    info_p->cache_sharing[type] 	= 0;
-                                    info_p->cache_partitions[type]	= 0;
+                                    cache_associativity = 1ul << (cache_associativity / 2)!=0;
                                 }
-                                else
-                                {
-                                    if (type == L2U)
-                                    {
-                                        info_p->cpuid_cache_L2_associativity = cache_associativity;
-                                        info_p->cpuid_cache_size = cache_size;
-                                    }
 
-                                    info_p->cache_size[L2U]	= cache_size;
-                                    info_p->cache_linesize = cache_linesize;
-                                    linesizes[L2U] = cache_linesize;
-                                    info_p->cache_sharing[L2U] = cache_sharing = cores;
-                                    info_p->cache_partitions[type] = cache_partitions = 1;
-                                    
-                                    colors = ( cache_linesize * cache_sets ) >> 12;
-                                    
-                                    if ( colors > vm_cache_geometry_colors )
-                                        vm_cache_geometry_colors = colors ;
+                                info_p->cache_size[type]	= cache_size;
+
+                                if (type == L2U)
+                                {
+                                    info_p->cpuid_cache_L2_associativity = cache_associativity;
+                                    info_p->cpuid_cache_size = cache_size;
                                 }
+
+                                cache_sets = cache_size / (cache_associativity * cache_linesize);
+
+                                info_p->cache_sharing[type] = cache_sharing = 1;
+
+                                colors = ( cache_linesize * cache_sets ) >> 12;
+
+                                if ( colors > vm_cache_geometry_colors )
+                                    vm_cache_geometry_colors = colors ;
+
+                                //printf("cache_size %d \n", cache_size[2]);
                             }
-                        }
                         break;
 
                         case Lnone:
                         default:
                             return;
+
                     }
                 }
             }
@@ -807,164 +789,116 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
             case 0x14:
             case 0x12:
             {
+                int i;
                 for ( i = 1; i<5 ; i++)
                 {
                     switch (i)
                     {
-                        case 1: /* L1 Data */
-                        {
+                        case 1:
                             cache_level = 1;
-                            cache_type = 1;
-                            type = cache_type == 1 ? L1D :
-                            Lnone;
-                              
-                            if(type == L1D)
-                            {
-                                cpuid_fn(0x80000005, reg) ;
-                                
-                                cache_size =   bitfield(reg[ecx],31,24) * 1024;
-                                cache_linesize = bitfield(reg[ecx],7,0);
-                                cache_associativity = bitfield(reg[ecx],23,16);
-                                cache_partitions    = bitfield32(reg[ecx], 15, 8);
-                                
-                                cache_sets = cache_size / (cache_partitions * cache_linesize * cache_associativity);
-                                
-                                linesizes[L1D] = cache_linesize;
-                                info_p->cache_linesize = linesizes[L1D];
-                                info_p->cache_size[L1D] = cache_size;
-                                info_p->cache_sharing[L1D] = cache_sharing = 1;
-                                info_p->cache_partitions[type] = cache_partitions;
-                                
-                                colors = ( cache_linesize * cache_sets ) >> 12;
-                                
-                                if ( colors > vm_cache_geometry_colors )
-                                    vm_cache_geometry_colors = colors ;
-                            }
-                        }
+                            cpuid_fn(0x80000005, reg) ;
+
+                            cache_size =   bitfield(reg[ecx],31,24) * 1024;
+                            cache_linesize = bitfield(reg[ecx],7,0);
+                            cache_associativity = bitfield(reg[ecx],23,16);
+                            cache_sets = cache_size / (cache_associativity * cache_linesize);
+                            linesizes[L1D] = cache_linesize;
+                            info_p->cache_linesize = linesizes[L1D];
+                            info_p->cache_size[L1D]	= cache_size;
+                            info_p->cache_sharing[L1D] = cache_sharing = 1;
+                            //printf("cache_sizes L1D: %d \n", cache_size);
+                            //printf("type : %d \n", type);
+
+                            colors = ( cache_linesize * cache_sets ) >> 12;
+
+                            if ( colors > vm_cache_geometry_colors )
+                                vm_cache_geometry_colors = colors ;
                         break;
 
-                        case 2: /* L1 Inst */
-                        {
-                            cache_type = 2;
-                            type = cache_type == 2 ? L1I :
-                            Lnone;
+                        case 2:
+                            cache_level = 1;
+                            cpuid_fn(0x80000005, reg) ;
 
-                            if(type == L1I)
-                            {
-                                cache_level = 1;
-                                
-                                cpuid_fn(0x80000005, reg) ;
-                                
-                                cache_size = bitfield(reg[edx],31,24) * 1024;
-                                cache_linesize = bitfield(reg[edx],7,0);
-                                cache_associativity = bitfield(reg[edx],23,16);
-                                cache_partitions    = bitfield32(reg[edx], 15, 8);
-                                
-                                cache_sets = cache_size / (cache_partitions * cache_linesize * cache_associativity);
-                                
-                                linesizes[L1I] = cache_linesize;
-                                info_p->cache_linesize = linesizes[L1I];
-                                info_p->cache_size[L1I] = cache_size;
-                                info_p->cache_sharing[L1I] = cache_sharing = 2;
-                                info_p->cache_partitions[type] = cache_partitions;
-                                
-                                colors = ( cache_linesize * cache_sets ) >> 12;
-                                
-                                if ( colors > vm_cache_geometry_colors )
-                                    vm_cache_geometry_colors = colors ;
-                                
-                            }
-                        }
+                            cache_size = bitfield(reg[edx],31,24) * 1024;
+                            cache_linesize = bitfield(reg[edx],7,0);
+                            cache_associativity = bitfield(reg[edx],23,16);
+                            cache_sets = cache_size / (cache_associativity * cache_linesize);
+                            linesizes[L1I] = cache_linesize;
+                            info_p->cache_linesize = linesizes[L1I];
+                            info_p->cache_size[L1I]	= cache_size;
+                            info_p->cache_sharing[L1I] = cache_sharing = 1;
+                            //printf("cache_size : %d \n", cache_size);
+                            //printf("type : %d \n", type);
+
+                            colors = ( cache_linesize * cache_sets ) >> 12;
+
+                            if ( colors > vm_cache_geometry_colors )
+                                vm_cache_geometry_colors = colors ;
                         break;
 
-                        case 3: /* Level 2 */
-                        {
-                            cache_type = 3;
-                            type = cache_type == 3 ? L2U :
-                            Lnone;
+                        case 3:
+                            type = 3 == 3 ? L2U : Lnone;
 
+                            cache_level = 2;
+
+                            //printf("type  L2U : %d \n", type);
                             if(type == L2U)
                             {
-                                cache_level = 2;
                                 /* L2 cache is in KB units, reported per-core */
-                                cpuid_fn(0x80000006, reg);
+                                cpuid_fn(0x80000006, reg) ;
 
                                 cache_size = bitfield(reg[ecx],31,16) * 1024;
                                 cache_linesize = bitfield(reg[ecx],7,0);
-                                cache_partitions = bitfield32(reg[ecx], 11, 8);
                                 cache_associativity = amdGetAssociativity(extractBitField(reg[ecx],4,12));
 
-                                cache_sets = cache_size / (cache_partitions *cache_linesize * cache_associativity );
-                                
-                                //if (type == L2U) {
-                                info_p->cpuid_cache_L2_associativity = cache_associativity;
-                                info_p->cpuid_cache_size = cache_size;
-                                //}
+                                cache_sets = cache_size / (cache_associativity * cache_linesize);
 
-                                info_p->cache_size[L2U] = cache_size;
+                                if (type == L2U)
+                                {
+                                    info_p->cpuid_cache_L2_associativity = cache_associativity;
+                                    info_p->cpuid_cache_size = cache_size;
+                                }
+
+                                info_p->cache_size[L2U]	= cache_size;
                                 info_p->cache_linesize = cache_linesize;
-                                linesizes[L2U] = cache_linesize;
-                                
-                                if ((strncmp(CPUID_VMM_ID_VMWARE, info_p->cpuid_vendor,
-                                             min(strlen(CPUID_STRING_UNKNOWN) + 1,
-                                                 sizeof(info_p->cpuid_vendor)))))
-                                    info_p->cache_sharing[L2U] = cores;
-                                else
-                                    info_p->cache_sharing[L2U] = cache_sharing = 2;
-                                
-                                info_p->cache_partitions[type] = cache_partitions;
+                                linesizes[L2U] = cache_linesize;//info_p->cpuid_cache_linesize;
+                                info_p->cache_sharing[L2U] = cache_sharing = 2;
 
                                 colors = ( cache_linesize * cache_sets ) >> 12;
 
                                 if ( colors > vm_cache_geometry_colors )
                                     vm_cache_geometry_colors = colors ;
+
+                                //printf("cache_size L2U: %d \n", cache_size);
+                                //printf("type  L2U : %d \n", type);
                             }
-                        }
                         break;
 
-                        case 4: /* Level 3 */
-                        {
-                            cache_type = 3;
-                            type = cache_type == 3 ? L3U : Lnone;
-                            
-                            if(type == L3U)
+                        case 4:
+                            cache_level = 3;
+
+                            if(L3ULinesPerTag)
                             {
-                                cache_level = 3;
                                 cpuid_fn(0x80000006, reg) ;
-                                  
+
                                 cache_size = bitfield(reg[edx],31,18) * 524288;
                                 cache_linesize = bitfield(reg[edx],7,0);
-                                cache_associativity = amdGetAssociativity(extractBitField(reg[edx],4,12));
-                                cache_partitions    = bitfield32(reg[edx], 11, 8);
-                                //cache_associativity   = 1ul << (cache_associativity / 2);
-                                if(cache_size == 0) {
-                                     //no L3 - emulate enable size =)
-                                    info_p->cache_size[type]    = 8388608;
-                                    info_p->cache_sharing[type]     = cores;
-                                    info_p->cache_partitions[type]  = 1;
-                                    info_p->cache_linesize = 64;
-                                    linesizes[L3U] = info_p->cache_linesize;
-                                    
-                                    colors = ( cache_linesize * cache_sets ) >> 12;
-                                    
-                                    if ( colors > vm_cache_geometry_colors )
-                                        vm_cache_geometry_colors = colors ;                                    
-                                } else {
-                                    cache_sets = cache_size / (cache_partitions * cache_linesize * cache_associativity);
-                                    
-                                    info_p->cache_linesize = cache_linesize;
-                                    linesizes[L3U] = info_p->cache_linesize;
-                                    info_p->cache_size[L3U] = cache_size;
-                                    info_p->cache_partitions[type] = cache_partitions ;
-                                    info_p->cache_sharing[L3U] = cores;
-                                    
-                                    colors = ( cache_linesize * cache_sets ) >> 12;
-                                    
-                                    if ( colors > vm_cache_geometry_colors )
-                                        vm_cache_geometry_colors = colors ;
-                                }
+                                cache_associativity = bitfield(reg[edx],15,12);
+
+                                cache_sets = cache_size / (cache_associativity * cache_linesize);
+                                info_p->cache_linesize = cache_linesize;
+                                linesizes[L3U] = info_p->cache_linesize;
+                                info_p->cache_size[L3U]	= cache_size;
+                                
+                                info_p->cache_sharing[L3U] = cores;
+
+                                colors = ( cache_linesize * cache_sets ) >> 12;
+                                
+                                if ( colors > vm_cache_geometry_colors )
+                                    vm_cache_geometry_colors = colors ;
+
+                                    //printf("cache_size L3U: %d \n", cache_size);
                             }
-                        }
                         break;
 
                         case Lnone:
@@ -981,12 +915,8 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
             case 0x16:
             case 0x6:
             {
-                cpuid_fn(0x8000001D, cpuid_result);
-                if (cpuid_result[eax] >= 4)
-                    cpuid_deterministic_supported = TRUE;
-
-                //uint32_t i;
-                for (i = 0; cpuid_deterministic_supported ; i++)
+                uint32_t i;
+                for (i = 0; 0<4 ; i++)
                 {
                     reg[eax] = 0x8000001D;		/* cpuid request 0x8000001D */
                     reg[ecx] = i;	/* index starting at 0 */
@@ -1028,21 +958,10 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
                      */
                     if (type != Lnone)
                     {
-                        /* if(type==L3U)
-                           {
-                               cache_associativity	= 1ul << (cache_associativity / 2)!=0;
-                           }
-                         */
                         cache_size = cache_linesize * cache_sets *
                         cache_associativity * cache_partitions;
-
-                        if ((strncmp(CPUID_VMM_ID_VMWARE, info_p->cpuid_vendor,
-                                     min(strlen(CPUID_STRING_UNKNOWN) + 1,
-                                         sizeof(info_p->cpuid_vendor)))))
-                            info_p->cache_sharing[type] = cores;
-                        else
-                            info_p->cache_sharing[type] = cache_sharing;
                         info_p->cache_size[type] = cache_size;
+                        info_p->cache_sharing[type] = cache_sharing;//cores;
                         info_p->cache_partitions[type] = cache_partitions;
                         linesizes[type] = cache_linesize;
 
@@ -1054,7 +973,7 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
                         if (type == L2U)
                         {
                             info_p->cpuid_cache_L2_associativity = cache_associativity;
-                            // info_p->cpuid_cache_size = cache_size;
+                            info_p->cpuid_cache_size = cache_size;
                         }
                         
                         /* Compute the number of page colors for this cache,
@@ -1082,40 +1001,11 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
 
                         if ( colors > vm_cache_geometry_colors )
                             vm_cache_geometry_colors = colors;
+
+                        //printf("cache_assoc: %d \n", cache_associativity);
+                        //printf("cache_size L3U: %d \n", cache_size);
                     }
                 }
-
-                /* Emulate virtual cache Start */
-                /* Bronzovka: Emulate virtual cache size */
-                if(cache_size == 0)
-                {
-                    //no L3 - emulate enable size =)
-                    info_p->cache_size[L1I]  	= 65536;
-                    info_p->cache_size[L1D]  	= 16384;
-                    info_p->cache_size[L2U]  	= 2097152;
-                    info_p->cache_size[L2U]  	= 8388608;
-                    info_p->cache_sharing[L1I] 	= cores;
-                    info_p->cache_sharing[L1D] 	= cores;
-                    info_p->cache_sharing[L2U] 	= cores;
-                    info_p->cache_sharing[L3U] 	= cores;
-                    
-                    info_p->cache_partitions[L1I]	= 1;
-                    info_p->cache_partitions[L1D]	= 1;
-                    info_p->cache_partitions[L2U]	= 1;
-                    info_p->cache_partitions[L3U]	= 1;
-                    info_p->cache_linesize = 64;
-                    linesizes[L1I] = info_p->cache_linesize;
-                    linesizes[L1D] = info_p->cache_linesize;
-                    linesizes[L2U] = info_p->cache_linesize;
-                    linesizes[L3U] = info_p->cache_linesize;
-                    
-                    colors = ( cache_linesize * cache_sets ) >> 12;
-                    
-                    if ( colors > vm_cache_geometry_colors )
-                        vm_cache_geometry_colors = colors ;
-                    printf("cache_size %d\n",info_p->cache_size[L2U]);
-                }
-                /* Emulate virtual cache END */
             }
             break;
             /* K10.5 Family END */
@@ -1150,10 +1040,10 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
             info_p->cache_linesize = linesizes[L2U];
         else if (linesizes[L1D])
             info_p->cache_linesize = linesizes[L1D];
-        else panic("no linesize");
+        else panic("no linesize\n");
         DBG(" cache_linesize    : %d\n", info_p->cache_linesize);
 
-        cpuid_fn(0x80000005, reg);
+        cpuid_fn(0x80000005, reg) ;
         // uint64_t L1DTlb2and4MAssoc = (uint32_t)bitfield(eax, 31, 24);
         uint32_t L1DTlb2and4MSize  = (uint32_t)bitfield(reg[eax], 23, 16);
         // uint64_t L1ITlb2and4MAssoc = (uint32_t)bitfield(eax, 15, 8);
@@ -1163,7 +1053,7 @@ get_amd_cache_info(i386_cpu_info_t *info_p)
         // uint64_t L1ITlb4KAssoc = (uint32_t)bitfield(ebx, 15, 8);
         uint32_t L1ITlb4KSize = (uint32_t)bitfield(reg[ebx], 7, 0);
 
-        cpuid_fn(0x80000006, reg);
+        cpuid_fn(0x80000006, reg) ;
         //  uint64_t L2DTlb2and4MAssoc = (uint32_t)bitfield(eax, 31, 28);
         uint32_t L2DTlb2and4MSize = (uint32_t)bitfield(reg[eax], 27, 16);
         //  uint64_t L2ITlb2and4MAssoc = (uint32_t)bitfield(eax, 15, 12);
@@ -1642,7 +1532,7 @@ cpuid_set_info(void)
 		/* if (PE_parse_boot_argn("-amdtlbfix", &dummyVar, sizeof(dummyVar)))
 		{
 			FixAMDTLB();
-		} */
+		}*/
 
 		get_amd_cache_info(&cpuid_cpu_info);
  

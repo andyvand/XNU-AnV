@@ -18,13 +18,9 @@
 unsigned char opemu_ktrap(x86_saved_state_t *state);
 void opemu_utrap(x86_saved_state_t *state);
 int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int);
-int sse3_run_a(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
-int sse3_run_b(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
-int sse3_run_c(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
-int monitor_mwait_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap);
-int fisttp_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap);
-int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, void *dst,
-				  unsigned int longmode, x86_saved_state_t *saved_state, int kernel_trap, int size_128);
+int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int );
+int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, void *dst,
+				  unsigned int longmode, x86_saved_state_t *saved_state, int kernel_trap, int size_128, int rex, int hsreg, int modbyte, int fisttp);
 void storeresult128(uint8_t ModRM, unsigned int hdst, ssp_m128 res);
 void storeresult64(uint8_t ModRM, unsigned int hdst, ssp_m64 res);
 #endif

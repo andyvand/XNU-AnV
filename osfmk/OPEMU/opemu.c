@@ -52,32 +52,12 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
     longmode = is_saved_state64(state);
 
     bytes_skip = ssse3_run(code_buffer, state, longmode, 1);
-    
+
     if (!bytes_skip)
     {
-        bytes_skip = sse3_run_a(code_buffer, state, longmode, 1);
+        bytes_skip = sse3_run(code_buffer, state, longmode, 1);
     }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = sse3_run_b(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = sse3_run_c(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = fisttp_run(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = monitor_mwait_run(code_buffer, state, longmode, 1);
-    }
-    
+
     if(!bytes_skip)
     {
         /* since this is ring0, it could be an invalid MSR read.
@@ -90,9 +70,9 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
             bytes_skip = 2;
         }
     }
-    
+
     saved_state->isf.rip += bytes_skip;
-    
+
     if(!bytes_skip)
     {
         uint8_t *ripptr = (uint8_t *)&(saved_state->isf.rip);
@@ -115,32 +95,12 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
     longmode = is_saved_state32(state);
 
     bytes_skip = ssse3_run(code_buffer, state, longmode, 1);
-    
+
     if (!bytes_skip)
     {
-        bytes_skip = sse3_run_a(code_buffer, state, longmode, 1);
+        bytes_skip = sse3_run(code_buffer, state, longmode, 1);
     }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = sse3_run_b(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = sse3_run_c(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = fisttp_run(code_buffer, state, longmode, 1);
-    }
-    
-    if (!bytes_skip)
-    {
-        bytes_skip = monitor_mwait_run(code_buffer, state, longmode, 1);
-    }
-    
+
     if(!bytes_skip)
     {
         /* since this is ring0, it could be an invalid MSR read.
@@ -155,7 +115,7 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
     }
 
     saved_state->eip += bytes_skip;
-    
+
     if(!bytes_skip)
     {
         uint8_t *eipptr = (uint8_t *)&(saved_state->eip);
@@ -164,13 +124,13 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
         /* Fall through to trap */
         return 0;
     }
+
     return 1;
 }
 #endif
 
 void opemu_utrap(x86_saved_state_t *state)
 {
-    
     int longmode;
     unsigned int bytes_skip = 0;
     vm_offset_t addr;
@@ -223,31 +183,11 @@ void opemu_utrap(x86_saved_state_t *state)
         
         if (!bytes_skip)
         {
-            bytes_skip = sse3_run_a(code_buffer, state, longmode, 0);
+            bytes_skip = sse3_run(code_buffer, state, longmode, 0);
         }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = sse3_run_b(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = sse3_run_c(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = fisttp_run(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = monitor_mwait_run(code_buffer, state, longmode, 0);
-        }
-        
+
         regs->isf.rip += bytes_skip;
-        
+
         if(!bytes_skip)
         {
             uint8_t *ripptr = (uint8_t *)&(regs->isf.rip);
@@ -295,29 +235,9 @@ void opemu_utrap(x86_saved_state_t *state)
         
         if (!bytes_skip)
         {
-            bytes_skip = sse3_run_a(code_buffer, state, longmode, 0);
+            bytes_skip = sse3_run(code_buffer, state, longmode, 0);
         }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = sse3_run_b(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = sse3_run_c(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = fisttp_run(code_buffer, state, longmode, 0);
-        }
-        
-        if (!bytes_skip)
-        {
-            bytes_skip = monitor_mwait_run(code_buffer, state, longmode, 0);
-        }
-        
+
         regs->eip += bytes_skip;
         
         if(!bytes_skip)
@@ -336,309 +256,149 @@ void opemu_utrap(x86_saved_state_t *state)
 
 /** Runs the sse3 emulator. returns the number of bytes consumed.
  **/
-int sse3_run_a(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap)
+int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap)
 {
     uint8_t *bytep = instruction;
     int ins_size = 0;
     ssp_m128 xmmsrc, xmmdst, xmmres;
     int src_higher = 0, dst_higher = 0;
-    
-    if(*bytep != 0xF2) return 0;
-    
-    bytep++;
-    ins_size++;
-    
-    if(*bytep != 0x0f) return 0;
-    bytep++;
-    ins_size++;
-    
-    uint8_t *modrm = &bytep[1];
-    ins_size += 1;
-    int consumed = fetchoperands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1);
-    ins_size += consumed;
+    int modbyte = 0; //Calculate byte 0 - modrm long
+    int fisttp = 0;
+    int rex = 0; //REX Mode
+    int hsreg = 0; //High Source Register Only
 
-    switch (*bytep)
+    // SSE3 Type 1
+    if((*bytep == 0x66 && bytep[1] == 0x0f && bytep[2] != 0x38) || (*bytep == 0x66 && bytep[1] == 0x0f && bytep[2] != 0x3A))
     {
-        case 0x12:
-            //movddup(&xmmsrc,&xmmres);
-            xmmres.d = ssp_movedup_pd_REF(xmmsrc.d);
-            break;
+        bytep += 2;
+        ins_size += 2;
+        modbyte += 4;
 
-        case 0x7C:
-            //haddps(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.f = ssp_hadd_ps_REF(xmmdst.f, xmmsrc.f);
-            break;
+        uint8_t *modrm = &bytep[1];
+        ins_size += 1;
+        int consumed = operands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1, rex, hsreg, modbyte, fisttp);
+        ins_size += consumed;
 
-        case 0x7D:
-            //hsubps(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.f = ssp_hsub_ps_REF(xmmdst.f, xmmsrc.f);
-            break;
+        switch (*bytep)
+        {
+            case 0x7C: //haddpd(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.d = ssp_hadd_pd_REF(xmmdst.d, xmmsrc.d); break;
+            case 0x7D: //hsubpd(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.d = ssp_hsub_pd_REF(xmmdst.d, xmmsrc.d); break;
+            case 0xD0: //addsubpd(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.d = ssp_addsub_pd_REF(xmmdst.d, xmmsrc.d); break;
+            default: return 0;
+        }
 
-        case 0xD0:
-            //addsubps(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.f = ssp_addsub_ps_REF(xmmdst.f, xmmsrc.f);
-            break;
+        storeresult128(*modrm, dst_higher, xmmres);
 
-        case 0xF0:
-            //lddqu(&xmmsrc,&xmmres);
-            xmmres.i = ssp_lddqu_si128_REF(&xmmsrc.i);
-            break;
-
-        default:
-            return 0;
-    }
-    
-    storeresult128(*modrm, dst_higher, xmmres);
-    
-    return ins_size;
-}
-
-int sse3_run_b(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap)
-{
-    uint8_t *bytep = instruction;
-    int ins_size = 0;
-    ssp_m128 xmmsrc, xmmdst, xmmres;
-    int src_higher = 0, dst_higher = 0;
-
-    if(*bytep != 0xF3) return 0;
-
-    bytep++;
-    ins_size++;
-
-    if(*bytep != 0x0f) return 0;
-    bytep++;
-    ins_size++;
-    
-    uint8_t *modrm = &bytep[1];
-    ins_size += 1;
-    int consumed = fetchoperands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1);
-    ins_size += consumed;
-
-    switch (*bytep)
-    {
-        case 0x12:
-            //movsldup(&xmmsrc,&xmmres);
-            xmmres.f = ssp_moveldup_ps_REF(xmmsrc.f);
-            break;
-
-        case 0x16:
-            //movshdup(&xmmsrc,&xmmres);
-            xmmres.f = ssp_movehdup_ps_REF(xmmsrc.f);
-            break;
-
-        default:
-            return 0;
+        return ins_size;
     }
 
-    storeresult128(*modrm, dst_higher, xmmres);
-
-    return ins_size;
-}
-
-int sse3_run_c(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap)
-{
-    uint8_t *bytep = instruction;
-    int ins_size = 0;
-    ssp_m128 xmmsrc, xmmdst, xmmres;
-    int src_higher = 0, dst_higher = 0;
-    
-    if(*bytep != 0x66) return 0;
-    
-    bytep++;
-    ins_size++;
-    
-    if(*bytep != 0x0f) return 0;
-    bytep++;
-    ins_size++;
-    
-    uint8_t *modrm = &bytep[1];
-    ins_size += 1;
-    int consumed = fetchoperands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1);
-    ins_size += consumed;
-
-    switch (*bytep)
+    // SSE3 Type 2
+    else if(*bytep == 0xF2 && bytep[1] == 0x0f)
     {
-        case 0x7C:
-            //haddpd(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.d = ssp_hadd_pd_REF(xmmdst.d, xmmsrc.d);
-            break;
+        bytep += 2;
+        ins_size += 2;
+        modbyte += 4;
 
-        case 0x7D:
-            //hsubpd(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.d = ssp_hsub_pd_REF(xmmdst.d, xmmsrc.d);
-            break;
+        uint8_t *modrm = &bytep[1];
+        ins_size += 1;
+        int consumed = operands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1, rex, hsreg, modbyte, fisttp);
+        ins_size += consumed;
 
-        case 0xD0:
-            //addsubpd(&xmmsrc,&xmmdst,&xmmres);
-            xmmres.d = ssp_addsub_pd_REF(xmmdst.d, xmmsrc.d);
-            break;
+        switch (*bytep)
+        {
+            case 0x12: //movddup(&xmmsrc,&xmmres); break;
+                xmmres.d = ssp_movedup_pd_REF(xmmsrc.d); break;
+            case 0x7C: //haddps(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.f = ssp_hadd_ps_REF(xmmdst.f, xmmsrc.f); break;
+            case 0x7D: //hsubps(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.f = ssp_hsub_ps_REF(xmmdst.f, xmmsrc.f); break;
+            case 0xD0: //addsubps(&xmmsrc,&xmmdst,&xmmres); break;
+                xmmres.f = ssp_addsub_ps_REF(xmmdst.f, xmmsrc.f); break;
+            case 0xF0: //lddqu(&xmmsrc,&xmmres); break;
+                xmmres.i = ssp_lddqu_si128_REF(&xmmsrc.i); break;
+            default: return 0;
+        }
 
-        default:
-            return 0;
+        storeresult128(*modrm, dst_higher, xmmres);
+
+        return ins_size;
     }
 
-    storeresult128(*modrm, dst_higher, xmmres);
-
-    return ins_size;
-}
-
-int fisttp_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int __unused kernel_trap)
-{
-    uint8_t *bytep = instruction;
-    int ins_size = 0;
-    uint8_t base = 0;
-    uint8_t mod = 0;
-    int8_t add = 0;
-    uint8_t modrm = 0;
-    uint64_t address = 0;
-    uint64_t reg_sel[8];
-
-    if (longmode)
+    // SSE3 Type 3
+    else if(*bytep == 0xF3 && bytep[1] == 0x0f)
     {
-        x86_saved_state64_t* r64 = saved_state64(state);
-        reg_sel[0] = r64->rax;
-        reg_sel[1] = r64->rcx;
-        reg_sel[2] = r64->rdx;
-        reg_sel[3] = r64->rbx;
-        reg_sel[4] = r64->isf.rsp;
-        reg_sel[5] = r64->rbp;
-        reg_sel[6] = r64->rsi;
-        reg_sel[7] = r64->rdi;
-    } else {
-        x86_saved_state32_t* r32 = saved_state32(state);
-        reg_sel[0] = r32->eax;
-        reg_sel[1] = r32->ecx;
-        reg_sel[2] = r32->edx;
-        reg_sel[3] = r32->ebx;
-        reg_sel[4] = r32->uesp;
-        reg_sel[5] = r32->ebp;
-        reg_sel[6] = r32->esi;
-        reg_sel[7] = r32->edi;
+        bytep += 2;
+        ins_size += 2;
+        modbyte += 4;
+
+        uint8_t *modrm = &bytep[1];
+        ins_size += 1;
+        int consumed = operands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1, rex, hsreg, modbyte, fisttp);
+        ins_size += consumed;
+
+        switch (*bytep)
+        {
+            case 0x12: //movsldup(&xmmsrc,&xmmres); break;
+                xmmres.f = ssp_moveldup_ps_REF(xmmsrc.f); break;
+            case 0x16: //movshdup(&xmmsrc,&xmmres); break;
+                xmmres.f = ssp_movehdup_ps_REF(xmmsrc.f); break;
+            default: return 0;
+        }
+
+        storeresult128(*modrm, dst_higher, xmmres);
+
+        return ins_size;
     }
 
-    if (*bytep == 0x66)
+    //SSE3 FISTTP
+    else if ((*bytep == 0x66 && bytep[1] == 0xDB)||(*bytep == 0x66 && bytep[1] == 0xDD)||(*bytep == 0x66 && bytep[1] == 0xDF))
     {
         bytep++;
-        ins_size++;
-    }
+        ins_size += 2;
+        modbyte += 3;
 
-    switch (*bytep)
-    {
-        case 0xDB: //fist dword
+        switch (*bytep)
         {
-            bytep++;
-            ins_size++;
-
-            modrm = *bytep;
-            base = modrm & 0x7;
-            mod = (modrm & 0xC0) >> 6;
-
-            if (mod == 0)
-            {
-                address = reg_sel[base];
-            } else if (mod == 1) {
-                bytep++;
-                ins_size++;
-
-                add = *bytep;
-                address = reg_sel[base] + add;
-            } else {
-                return 0;
-            }
-
-            *(int *)address = fisttpl((double *)address);
-
-            ins_size++;
-
-            return(ins_size);
+            case 0xDB: //fild 0x66 0xDB
+                fisttp = 1;
+                break;
+            case 0xDD: //fld 0x66 0xDD
+                fisttp = 2;
+                break;
+            case 0xDF: //fild 0x66 0xDF
+                fisttp = 3;
+                break;
         }
 
-        case 0xDD: //fst qword
+        uint8_t *modrm = &bytep[1];
+        int consumed = operands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1, rex, hsreg, modbyte, fisttp);
+        ins_size += consumed;
+
+        return ins_size;
+    }
+
+    //SSE3 monitor/mwait
+    else if(*bytep == 0x0F && bytep[1] == 0x01)
+    {
+
+        bytep += 2;
+        ins_size += 3;
+
+        switch(*bytep)
         {
-            bytep++;
-            ins_size++;
-
-            modrm = *bytep;
-            base = modrm & 0x7;
-            mod = (modrm & 0xC0) >> 6;
-
-            if (mod == 0)
-            {
-                address = reg_sel[base];
-            } else if (mod == 1) {
-                bytep++;
-                ins_size++;
-
-                add = *bytep;
-                address = reg_sel[base] + add;
-            } else {
-                return 0;
-            }
-
-            *(long long *)address = fisttpq((long double *)address);
-
-            ins_size++;
-
-            return(ins_size);
+            
+            case 0xC8: break; //monitor: 0x0f,0x01,0xc8
+            case 0xC9: break; //mwait: 0x0f,0x01,0xc9
+            default: return 0;
         }
 
-        case 0xDF: //fist word
-        {
-            bytep++;
-            ins_size++;
-
-            modrm = *bytep;
-            base = modrm & 0x7;
-            mod = (modrm & 0xC0) >> 6;
-
-            if (mod == 0)
-            {
-                address = reg_sel[base];
-            } else if (mod == 1) {
-                bytep++;
-                ins_size++;
-
-                add = *bytep;
-                address = reg_sel[base] + add;
-            } else {
-                return 0;
-            }
-
-            *(short *)address = fisttps((float *)address);
-
-            ins_size++;
-
-            return(ins_size);
-        }
-    }
-    return 0;
-}
-
-int monitor_mwait_run(uint8_t *instruction, __unused x86_saved_state_t *  state, int __unused longmode, int __unused kernel_trap)
-{
-    uint8_t *bytep = instruction;
-
-    if (*bytep != 0x0F)
-    {
-        return 0;
+        return ins_size;
     }
 
-    bytep++;
-
-    if (*bytep != 0x01)
-    {
-        return 0;
-    }
-
-    bytep++;
-
-    switch(*bytep)
-    {
-        case 0xC8: //monitor : 0x0f,0x01,0xc8 sidt eax
-        case 0xC9: //mwait :   0x0f,0x01,0xc9 sidt ecx
-            return 3;
-    }
-    return 0;
+    return ins_size;
 }
 
 /** Runs the ssse3 emulator. returns the number of bytes consumed.
@@ -649,6 +409,10 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
     uint8_t *bytep = instruction;
     int ins_size = 0;
     int is_128 = 0, src_higher = 0, dst_higher = 0;
+    int modbyte = 0; //Calculate byte 0 - modrm long
+    int fisttp = 0;
+    int rex = 0; //REX Mode
+    int hsreg = 0; //High Source Register Only
 
     ssp_m128 xmmsrc, xmmdst, xmmres;
     ssp_m64 mmsrc,mmdst, mmres;
@@ -661,21 +425,33 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
         is_128 = 1;
         bytep++;
         ins_size++;
+        modbyte++;
     }
 
-    /* 40->4f use higher xmm registers.*/
+    /* REX Prefixes 40-4F Use REX Mode.
+     * Use higher registers.
+     * xmm8-15 & R8-R15.
+     */
     if((*bytep & 0xF0) == 0x40)
     {
+        rex = 1;
         if(*bytep & 1) src_higher = 1;
         if(*bytep & 4) dst_higher = 1;
+
+        /*** High Source Register Only ***/
+        if((*bytep == 0x41)||(*bytep == 0x43)||(*bytep == 0x49)||(*bytep == 0x4B))
+            hsreg = 1;
+
         bytep++;
         ins_size++;
+        modbyte++;
     }
 
     if(*bytep != 0x0f) return 0;
 
     bytep++;
     ins_size++;
+    modbyte++;
 
     /* Two SSSE3 instruction prefixes. */
     if((*bytep == 0x38 && bytep[1] != 0x0f) || (*bytep == 0x3a && bytep[1] == 0x0f))
@@ -683,38 +459,43 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
         uint8_t opcode = bytep[1];
         uint8_t *modrm = &bytep[2];
         uint8_t imm;
+/*
         uint8_t mod = *modrm >> 6;
         uint8_t num_src = *modrm & 0x7;
-        uint8_t base = modrm[1] & 0x7;
-        ins_size += 2; // not counting modRM byte or anything after.
+        uint8_t *sib = &bytep[3];
+        uint8_t base = *sib & 0x7;
 
         if (mod == 0)
         {
             if (num_src == 4)
-                if(base == 5) imm = bytep[8];//modrm offset + 6
-                else imm = bytep[4];//modrm offset + 2
-            else if (num_src == 5) imm = bytep[7];//modrm offset + 5
-            else imm = bytep[3];//modrm offset + 1
+                if(base == 5) imm = *((uint8_t*)&bytep[8]); //modrm offset + 6
+                else imm = *((uint8_t*)&bytep[4]); //modrm offset + 2
+            else if (num_src == 5) imm = *((uint8_t*)&bytep[7]); //modrm offset + 5
+            else imm = *((uint8_t*)&bytep[3]); //modrm offset + 1
         }
 
         if (mod == 1)
         {
-            if(num_src == 4) imm = bytep[5];//modrm offset + 3
-            else imm = bytep[4];//modrm offset + 2
+            if(num_src == 4) imm = *((uint8_t*)&bytep[5]); //modrm offset + 3
+            else imm = *((uint8_t*)&bytep[4]); //modrm offset + 2
         }
 
         if (mod == 2)
         {
-            if(num_src == 4) imm = bytep[8];//modrm offset + 6
-            else imm = bytep[7];//modrm offset + 5
+            if(num_src == 4) imm = *((uint8_t*)&bytep[8]); //modrm offset + 6
+            else imm = *((uint8_t*)&bytep[7]); //modrm offset + 5
         }
 
-        if (mod == 3) imm = bytep[3];//modrm offset + 1
+        if (mod == 3) imm = *((uint8_t*)&bytep[3]); //modrm offset + 1
+*/
+        ins_size += 2; // not counting modRM byte or anything after.
+        if(*bytep == 0x3a && bytep[1] == 0x0f) modbyte += 4;
+        else modbyte += 3;
 
         if(is_128)
         {
-            int consumed = fetchoperands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1);
-            //operand = bytep[2 + consumed];
+            int consumed = operands(modrm, src_higher, dst_higher, &xmmsrc, &xmmdst, longmode, state, kernel_trap, 1, rex, hsreg, modbyte, fisttp);
+            imm = *((uint8_t*)&bytep[2 + consumed]);
             ins_size += consumed;
 
             switch(opcode)
@@ -758,8 +539,8 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
         }
         else
         {
-            int consumed = fetchoperands(modrm, src_higher, dst_higher, &mmsrc, &mmdst, longmode, state, kernel_trap, 0);
-            //operand = bytep[2 + consumed];
+            int consumed = operands(modrm, src_higher, dst_higher, &mmsrc, &mmdst, longmode, state, kernel_trap, 0, rex, hsreg, modbyte, fisttp);
+            imm = *((uint8_t*)&bytep[2 + consumed]);
             ins_size += consumed;
 
             switch(opcode)
@@ -801,7 +582,6 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
 
             storeresult64(*modrm, dst_higher, mmres);
         }
-
     }
     else
     {
@@ -822,7 +602,7 @@ void print_bytes(uint8_t *from, int size)
     printf("\n");
 }
 
-/** Fetch SSSE3 operands (except immediate values, which are fetched elsewhere).
+/* Fetch SSEX operands (except immediate values, which are fetched elsewhere).
  * We depend on memory copies, which differs depending on whether we're in kernel space
  * or not. For this reason, need to pass in a lot of information, including the state of
  * registers.
@@ -830,28 +610,26 @@ void print_bytes(uint8_t *from, int size)
  * The return value is the number of bytes used, including the ModRM byte,
  * and displacement values, as well as SIB if used.
  */
-int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, void *dst, unsigned int longmode, x86_saved_state_t *saved_state, int kernel_trap, int size_128)
+int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, void *dst, unsigned int longmode, x86_saved_state_t *saved_state, int kernel_trap, int size_128, int rex, int hsreg, int modbyte, int fisttp)
 {
-    unsigned int num_src = *ModRM & 0x7; // 1 byte + 1 regs loop
-    unsigned int num_dst = (*ModRM >> 3) & 0x7; //8 byte + 1 xmm loop
-    unsigned int mod = *ModRM >> 6; // 40 byte + 1
+    /*** ModRM Is First Addressing Modes ***/
+    /*** SIB Is Second Addressing Modes ***/
+    unsigned int num_src = *ModRM & 0x7; // R/M (register or memory) 
+    unsigned int num_dst = (*ModRM >> 3) & 0x7; // digit/xmm register (xmm/mm)
+    unsigned int mod = *ModRM >> 6; // Mod
     int consumed = 1; //modrm + 1 byte
     uint8_t bytelong = 0x00;
 
     if(hsrc) num_src += 8;
     if(hdst) num_dst += 8;
 
-    if(size_128)
-        getxmm((ssp_m128*)dst, num_dst);
-    else
-        getmm((ssp_m64*)dst, num_dst);
+    if(size_128) getxmm((ssp_m128*)dst, num_dst);
+    else getmm((ssp_m64*)dst, num_dst);
 
-    if(mod == 3)
+    if(mod == 3) //mod field = 11b
     {
-        if(size_128)
-            getxmm((ssp_m128*)src, num_src);
-        else
-            getmm((ssp_m64*)src, num_src);
+        if(size_128) getxmm((ssp_m128*)src, num_src);
+        else getmm((ssp_m64*)src, num_src);
     }
 
     // Implemented 64-bit fetch
@@ -860,167 +638,444 @@ int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *sr
         uint64_t address;
         // DST is always an XMM register. decode for SRC.
         x86_saved_state64_t *r64 = saved_state64(saved_state);
-        __uint64_t reg_sel[8] = {r64->rax, r64->rcx, r64->rdx,
-            r64->rbx, r64->isf.rsp, r64->rbp,
-            r64->rsi, r64->rdi};
-
-        if(hsrc) printf("opemu error: high reg ssse\n"); // FIXME
-
-        if (mod == 0)
+        uint64_t reg_sel[8] =
         {
+            r64->rax,     //0
+            r64->rcx,     //1
+            r64->rdx,     //2
+            r64->rbx,     //3
+            r64->isf.rsp, //4
+            r64->rbp,     //5
+            r64->rsi,     //6
+            r64->rdi      //7
+        };
+
+        /*** DEBUG ***/
+        //if(hdst) printf("opemu debug: high Register ssse\n"); // use xmm8-xmm15 register
+
+        /*** REX Prefixes 40-4F Use REX Mode ***/
+        if (rex)
+        {
+            /*** R/M = RSP USE SIB Addressing Modes ***/
             if (num_src == 4)
             {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 regs loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 regs loop
+                uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+                uint8_t scale = *sib >> 6; //SIB Scale field
+                uint8_t base = *sib & 0x7; //SIB Base
+                uint8_t index = (*sib >> 3) & 0x7; //SIB Index
+                uint8_t factor; //Scaling factor
+                if (scale == 0) factor = 1;
+                else if (scale == 1) factor = 2;
+                else if (scale == 2) factor = 4;
+                else if (scale == 3) factor = 8;
 
-                if(base == 5)
+                if (mod == 0) //mod field = 00b
                 {
-                    //ModRM              0  1  2  3  4  5
-                    //byte   0  1  2  3  4  5  6  7  8  9
-                    //OPCPDE 66 0F 38 01 04 05 04 03 02 01
-                    //INS    phaddw xmm0, xmmword [ds:0x1020304+rax]
-                    bytelong = 0x0a;
-                    address = (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2])) + reg_sel[index];
-                    consumed += 5;
-                }
-                else
-                {
-                    if (index == 4)
+                    if(base == 5) //Base Register = RBP
                     {
-                        //ModRM              0  1
-                        //byte   0  1  2  3  4  5
-                        //OPCPDE 66 0F 38 01 04 61
-                        //INS    phaddw xmm0, xmmword [ds:rcx]
-                        address = reg_sel[base];
-                        consumed++;
+                        if(index == 4) //Base Register = RBP & Index Register = RSP
+                        {
+                            if (hsreg)
+                            {
+                                //ModRM                 0  1  2  3  4  5
+                                //byte   0  1  2  3  4  5  6  7  8  9  10
+                                //OPCPDE 66 43 0F 38 01 04 65 04 03 02 01
+                                //INS    phaddw xmm0, xmmword [ds:0x1020304+r12*2]
+                                //PTR = Disp32 + (Index*Scale)
+                                bytelong = modbyte + 5;
+                                address = (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2])) + (reg_sel[index] * factor);
+                                consumed += 5;
+                            }
+                            else
+                            {
+                                //ModRM                 0  1  2  3  4  5
+                                //byte   0  1  2  3  4  5  6  7  8  9  10
+                                //OPCPDE 66 40 0F 38 01 04 65 04 03 02 01
+                                //INS    phaddw xmm0, xmmword [ds:0x1020304]
+                                //PTR = Disp32
+                                bytelong = modbyte + 5;
+                                address = r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]);
+                                consumed += 5;
+                            }
+                        }
+                        else //base 5 & Not Index 4
+                        {
+                            //ModRM                 0  1  2  3  4  5
+                            //byte   0  1  2  3  4  5  6  7  8  9  10
+                            //OPCPDE 66 43 0F 38 01 04 45 04 03 02 01
+                            //INS    phaddw xmm0, xmmword [ds:0x1020304+r8*2]
+                            //PTR = Disp32 + (Index*Scale)
+                            bytelong = modbyte + 5;
+                            address = (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2])) + (reg_sel[index] * factor);
+                            consumed += 5;
+                        }
                     }
-                    else
+                    else //Not Base 5
                     {
-                        //ModRM              0  1
-                        //byte   0  1  2  3  4  5
-                        //OPCPDE 66 0F 38 01 04 44
-                        //INS    phaddw xmm0, xmmword ptr [rsp+rax*2]
-                        address = reg_sel[base] + (reg_sel[index] * (1<<scale));
-                        consumed++;
+                        if (index == 4) // Index Register = RSP
+                        {
+                            if (hsreg)
+                            {
+                                //ModRM                 0  1
+                                //byte   0  1  2  3  4  5  6
+                                //OPCPDE 66 43 0F 38 01 04 64
+                                //INS    phaddw xmm0, xmmword [ds:r12+r12*2]
+                                //PTR = Base + (Index*Scale)
+                                address = reg_sel[base] + (reg_sel[index] * factor);
+                                consumed++;
+                            }
+                            else
+                            {
+                                //ModRM                 0  1
+                                //byte   0  1  2  3  4  5  6
+                                //OPCPDE 66 40 0F 38 01 04 63
+                                //INS    phaddw xmm0, xmmword [ds:rbx]
+                                //PTR = Base
+                                address = reg_sel[base];
+                                consumed++;
+                            }
+                        }
+                        else //SIB General Mode
+                        {
+                            //ModRM                 0  1
+                            //byte   0  1  2  3  4  5  6
+                            //OPCPDE 66 43 0F 38 01 04 44
+                            //INS    phaddw xmm0, xmmword [ds:r12+r8*2]
+                            //PTR = Base + (Index*Scale)
+                            address = reg_sel[base] + (reg_sel[index] * factor);
+                            consumed++;
+                        }
+                    }
+                }
+
+                else if (mod == 1) //mod field = 01b
+                {
+                    if (index == 4) // Index Register = RSP
+                    {
+                        if (hsreg)
+                        {
+                            //ModRM                 0  1  2
+                            //byte   0  1  2  3  4  5  6  7
+                            //OPCPDE 66 43 0F 38 01 44 65 04
+                            //INS    phaddw     xmm0, xmmword [ds:r13+r12*2+0x4]
+                            //PTR = Base + (Index*Scale) + Disp8
+                            address = reg_sel[base] + (reg_sel[index] * factor) + *((int8_t*)&ModRM[2]);
+                            consumed+= 2;
+                        }
+                        else
+                        {
+                            //ModRM                 0  1  2
+                            //byte   0  1  2  3  4  5  6  7
+                            //OPCPDE 66 40 0F 38 01 44 65 04
+                            //INS    phaddw xmm0, xmmword [ss:rbp+0x4]
+                            //PTR = Base + Disp8
+                            address = reg_sel[base] + *((int8_t*)&ModRM[2]);
+                            consumed+= 2;
+                        }
+                    }
+                    else //SIB General Mode
+                    {
+                        //ModRM                 0  1  2
+                        //byte   0  1  2  3  4  5  6  7
+                        //OPCPDE 66 40 0F 38 01 44 44 04
+                        //INS    phaddw xmm0, xmmword [ss:rsp+rax*2+0x4]
+                        //PTR = Base + (Index*Scale) + Disp32
+                        address = reg_sel[base] + (reg_sel[index] * factor) + *((int8_t*)&ModRM[2]);
+                        consumed+= 2;
+                    }
+                }
+
+                else if (mod == 2) //mod field = 10b
+                {
+                    if (index == 4) // Index Register = RSP
+                    {
+                        if (hsreg)
+                        {
+                            //ModRM                 0  1  2  3  4  5
+                            //byte   0  1  2  3  4  5  6  7  8  9  10
+                            //OPCPDE 66 43 0F 38 01 84 64 04 03 02 01
+                            //INS    phaddw xmm0, xmmword [ds:r12+r12*2+0x1020304]
+                            //PTR = Base + (Index*Scale) + Disp32
+                            bytelong = modbyte + 5;
+                            address = reg_sel[base] + (reg_sel[index] * factor) + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
+                            consumed += 5;
+                        }
+                        else
+                        {
+                            //ModRM                 0  1  2  3  4  5
+                            //byte   0  1  2  3  4  5  6  7  8  9  10
+                            //OPCPDE 66 40 0F 38 01 84 64 04 03 02 01
+                            //INS    phaddw xmm0, xmmword [ss:rsp+0x1020304]
+                            //PTR = Base + Disp32
+                            bytelong = modbyte + 5;
+                            address = reg_sel[base] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
+                            consumed += 5;
+                        }
+                    }
+                    else //SIB General Mode
+                    {
+                        //ModRM                 0  1  2  3  4  5
+                        //byte   0  1  2  3  4  5  6  7  8  9  10
+                        //OPCPDE 66 43 0F 38 01 84 44 04 03 02 01
+                        //INS    phaddw xmm0, xmmword [ds:r12+r8*2+0x1020304]
+                        //PTR = Base + (Index*Scale) + Disp32
+                        bytelong = modbyte + 5;
+                        address = reg_sel[base] + (reg_sel[index] * factor) + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
+                        consumed += 5;
                     }
                 }
             }
+            /*** R/M = RBP in mod 0 Use Disp32 Offset ***/
             else if (num_src == 5)
             {
-                //ModRM              0  1  2  3  4
-                //BYTE   0  1  2  3  4  5  6  7  8
-                //OPCPDE 66 0F 38 01 05 01 02 03 04
-                //INS    phaddw xmm0, xmmword ptr [cs:04030201h]
-                bytelong = 0x09;
-                address = r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]);
-                consumed += 4;
-                /***DEBUG***/
-                //int32_t ds = *((int32_t*)&ModRM[1]);
-                //printf("DEBUG-MSG: byte=%x, RIP=%llx ,DS=%d, PTR = %llx\n", bytelong , r64->isf.rip, ds, address);
-                /***DEBUG***/
+                if (mod == 0)
+                {
+                    //ModRM                 0  1  2  3  4
+                    //byte   0  1  2  3  4  5  6  7  8  9
+                    //OPCPDE 66 43 0F 38 01 05 04 03 02 01
+                    //INS    phaddw xmm0, xmmword [ds:0x102112e]
+                    //PTR = Disp32
+                    bytelong = modbyte + 4;
+                    address = r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]);
+                    consumed += 4;
+                }
             }
+
+            /*** General Mode ***/
             else
             {
-                //ModRM              0
-                //BYTE   0  1  2  3  4
-                //OPCPDE 66 0F 38 01 03
-                //INS    phaddw xmm0, xmmword [ds:rbx]
-                address = reg_sel[num_src];
-            }
-        }
-
-        if (mod == 1)
-        {
-            if(num_src == 4)
-            {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 reg loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 reg loop
-
-                if (index == 4)
+                if (mod == 0) //mod field = 00b
                 {
-                    //ModRM              0  1  2
-                    //BYTE   0  1  2  3  4  5  6
-                    //OPCPDE 66 0F 38 01 44 27 80
-                    //INS    phaddw xmm0, xmmword ptr [rdi-80h]
-                    address = reg_sel[base] + (int8_t)ModRM[2];
-                    consumed+= 2;
+                    //ModRM                 0
+                    //BYTE   0  1  2  3  4  5
+                    //OPCPDE 66 43 0F 38 01 03
+                    //INS    phaddw xmm0, xmmword [ds:r11]
+                    //PTR = R/M
+                    address = reg_sel[num_src];
                 }
-                else
+                else if (mod == 1) //mod field = 01b
                 {
-                    //ModRM              0  1  2
-                    //BYTE   0  1  2  3  4  5  6
-                    //OPCPDE 66 0F 38 01 44 44 80
-                    //INS    phaddw xmm0, xmmword ptr [rsp+rax*2-80h]
-                    address = reg_sel[base] + (reg_sel[index] * (1<<scale)) + (int8_t)ModRM[2];
-                    consumed+= 2;
+                    //ModRM                 0  1
+                    //byte   0  1  2  3  4  5  6
+                    //OPCPDE 66 43 0F 38 01 43 01
+                    //INS    phaddw xmm0, xmmword [ds:r11+0x1]
+                    //PTR = R/M + Disp8
+                    address = reg_sel[num_src] + *((int8_t*)&ModRM[1]);
+                    consumed++;
+                }
+                else if (mod == 2) //mod field = 10b
+                {
+                    //ModRM                 0  1  2  3  4
+                    //byte   0  1  2  3  4  5  6  7  8  9
+                    //OPCPDE 66 43 0F 38 01 83 04 03 02 01
+                    //INS    phaddw xmm0, xmmword [ds:r11+0x1020304]
+                    //PTR = R/M + Disp32
+                    bytelong = modbyte + 4;
+                    address = reg_sel[num_src] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]));
+                    consumed += 4;
                 }
             }
-            else
-            {
-                //ModRM              0  1
-                //BYTE   0  1  2  3  4  5
-                //OPCPDE 66 0F 38 01 43 01
-                //INS    phaddw xmm0, xmmword [ds:rbx+0x1]
-                address = reg_sel[num_src] + (int8_t)ModRM[1];
-                consumed++;
-            }
-        }
 
-        if (mod == 2)
-        {
-            if(num_src == 4)
-            {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 reg loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 reg loop
-
-                if (index == 4)
-                {
-                    //ModRM              0  1  2  3  4  5
-                    //BYTE   0  1  2  3  4  5  6  7  8  9
-                    //OPCPDE 66 0F 38 01 84 20 04 03 02 01
-                    //INS    phaddw xmm0, xmmword ptr [rax+1020304h]
-                    bytelong = 0x0a;
-                    address = reg_sel[base] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
-                    consumed += 5;
-                }
-                else
-                {
-                    //ModRM              0  1  2  3  4  5
-                    //BYTE   0  1  2  3  4  5  6  7  8  9
-                    //OPCPDE 66 0F 38 01 84 44 04 03 02 01
-                    //INS    phaddw xmm0, xmmword ptr [rsp+rax*2+1020304h]
-                    bytelong = 0x0a;
-                    address = reg_sel[base] + (reg_sel[index] * (1<<scale)) + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
-                    consumed += 5;
-                }
-
-            }
-            else
-            {
-                //ModRM              0  1  2  3  4
-                //BYTE   0  1  2  3  4  5  6  7  8
-                //OPCPDE 66 0F 38 01 83 01 02 03 04
-                //INS    phaddw xmm0, xmmword [ds:rbx+0x4030201]
-                bytelong = 0x09;
-                address = reg_sel[num_src] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]));
-                consumed += 4;
-            }
-        }
-
-        // address is good now, do read and store operands.
-        if(kernel_trap)
-        {
-            if(size_128) ((ssp_m128*)src)->ui = *((__uint128_t*)address);
-            else ((ssp_m64*)src)->u64 = *((uint64_t*)address);
-        }
+        } //REX Mode END
         else
         {
-            //printf("XNU: PTR = %llx, RIP=%llx, RSP=%llx\n", address, r64->isf.rip, reg_sel[4]);
-            if(size_128) copyin(address, (char*)& ((ssp_m128*)src)->ui, 16);
-            else copyin(address, (char*)& ((ssp_m64*)src)->u64, 8);
+            /*** R/M = RSP USE SIB Addressing Modes ***/
+            if (num_src == 4)
+            {
+                uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+                uint8_t scale = *sib >> 6; //SIB Scale field
+                uint8_t base = *sib & 0x7; //SIB Base
+                uint8_t index = (*sib >> 3) & 0x7; //SIB Index
+                uint8_t factor; //Scaling factor
+                if (scale == 0) factor = 1;
+                else if (scale == 1) factor = 2;
+                else if (scale == 2) factor = 4;
+                else if (scale == 3) factor = 8;
+
+                if (mod == 0) //mod field = 00b
+                {
+                    if(base == 5) //Base Register = RBP
+                    {
+                        if(index == 4) //Base Register = RBP & Index Register = RSP
+                        {
+                            //ModRM              0  1  2  3  4  5
+                            //byte   0  1  2  3  4  5  6  7  8  9
+                            //OPCPDE 66 0F 38 01 04 25 04 03 02 01
+                            //INS    phaddw xmm0, xmmword [ds:0x1020304]
+                            //PTR = Disp32
+                            bytelong = modbyte + 5;
+                            address = r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]);
+                            consumed += 5;
+                        }
+                        else //base 5 & Not Index 4
+                        {
+                            //ModRM              0  1  2  3  4  5
+                            //byte   0  1  2  3  4  5  6  7  8  9
+                            //OPCPDE 66 0F 38 01 04 05 04 03 02 01
+                            //INS    phaddw xmm0, xmmword [ds:0x1020304+rax]
+                            //PTR = Disp32 + (Index*Scale)
+                            bytelong = modbyte + 5;
+                            address = (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2])) + (reg_sel[index] * factor);
+                            consumed += 5;
+                        }
+                    }
+                    else //Not Base 5
+                    {
+                        if (index == 4) // Index Register = RSP
+                        {
+                            //ModRM              0  1
+                            //byte   0  1  2  3  4  5
+                            //OPCPDE 66 0F 38 01 04 61
+                            //INS    phaddw xmm0, xmmword [ds:rcx]
+                            //PTR = Base
+                            address = reg_sel[base];
+                            consumed++;
+                        }
+                        else //SIB General Mode
+                        {
+                            //ModRM              0  1
+                            //byte   0  1  2  3  4  5
+                            //OPCPDE 66 0F 38 01 04 44
+                            //INS    phaddw xmm0, xmmword ptr [rsp+rax*2]
+                            //PTR = Base + (Index*Scale)
+                            address = reg_sel[base] + (reg_sel[index] * factor);
+                            consumed++;
+                        }
+                    }
+                }
+
+                else if (mod == 1) //mod field = 01b
+                {
+                    if (index == 4) // Index Register = RSP
+                    {
+                        //ModRM              0  1  2
+                        //BYTE   0  1  2  3  4  5  6
+                        //OPCPDE 66 0F 38 01 44 27 80
+                        //INS    phaddw xmm0, xmmword ptr [rdi-80h]
+                        //PTR = Base + Disp8
+                        address = reg_sel[base] + *((int8_t*)&ModRM[2]);
+                        consumed+= 2;
+                    }
+                    else //SIB General Mode
+                    {
+                        //ModRM              0  1  2
+                        //BYTE   0  1  2  3  4  5  6
+                        //OPCPDE 66 0F 38 01 44 44 80
+                        //INS    phaddw xmm0, xmmword ptr [rsp+rax*2-80h]
+                        //PTR = Base + (Index*Scale) + Disp8
+                        address = reg_sel[base] + (reg_sel[index] * factor) + *((int8_t*)&ModRM[2]);
+                        consumed+= 2;
+                    }
+                }
+
+                else if (mod == 2) //mod field = 10b
+                {
+                    if (index == 4) // Index Register = RSP
+                    {
+                        //ModRM              0  1  2  3  4  5
+                        //BYTE   0  1  2  3  4  5  6  7  8  9
+                        //OPCPDE 66 0F 38 01 84 20 04 03 02 01
+                        //INS    phaddw xmm0, xmmword ptr [rax+1020304h]
+                        //PTR = Base + Disp32
+                        bytelong = modbyte + 5;
+                        address = reg_sel[base] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
+                        consumed += 5;
+                    }
+                    else //SIB General Mode
+                    {
+                        //ModRM              0  1  2  3  4  5
+                        //BYTE   0  1  2  3  4  5  6  7  8  9
+                        //OPCPDE 66 0F 38 01 84 44 04 03 02 01
+                        //INS    phaddw xmm0, xmmword ptr [rsp+rax*2+1020304h]
+                        //PTR = Base + (Index*Scale) + Disp32
+                        bytelong = modbyte + 5;
+                        address = reg_sel[base] + (reg_sel[index] * factor) + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[2]));
+                        consumed += 5;
+                    }
+                }
+            }
+            /*** R/M = RBP in mod 0 Use Disp32 Offset ***/
+            else if (num_src == 5)
+            {
+                if (mod == 0) //mod field = 00b
+                {
+                    //ModRM              0  1  2  3  4
+                    //BYTE   0  1  2  3  4  5  6  7  8
+                    //OPCPDE 66 0F 38 01 05 01 02 03 04
+                    //INS    phaddw xmm0, xmmword ptr [cs:04030201h]
+                    //PTR = Disp32
+                    bytelong = modbyte + 4;
+                    address = r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]);
+                    consumed += 4;
+                    /***DEBUG***/
+                    //int32_t ds = *((int32_t*)&ModRM[1]);
+                    //printf("DEBUG-MSG: byte=%x, RIP=%llx ,DS=%d, PTR = %llx\n", bytelong , r64->isf.rip, ds, address);
+                    /***DEBUG***/
+                }
+            }
+
+            /*** General Mode ***/
+            else
+            {
+                if (mod == 0) //mod field = 00b
+                {
+                    //ModRM              0
+                    //BYTE   0  1  2  3  4
+                    //OPCPDE 66 0F 38 01 03
+                    //INS    phaddw xmm0, xmmword [ds:rbx]
+                    //PTR = R/M
+                    address = reg_sel[num_src];
+                }
+                else if (mod == 1) //mod field = 01b
+                {
+                    //ModRM              0  1
+                    //BYTE   0  1  2  3  4  5
+                    //OPCPDE 66 0F 38 01 43 01
+                    //INS    phaddw xmm0, xmmword [ds:rbx+0x1]
+                    //PTR = R/M + Disp8
+                    address = reg_sel[num_src] + *((int8_t*)&ModRM[1]);
+                    consumed++;
+                }
+                else if (mod == 2) //mod field = 10b
+                {
+                    //ModRM              0  1  2  3  4
+                    //BYTE   0  1  2  3  4  5  6  7  8
+                    //OPCPDE 66 0F 38 01 83 01 02 03 04
+                    //INS    phaddw xmm0, xmmword [ds:rbx+0x4030201]
+                    //PTR = R/M + Disp32
+                    bytelong = modbyte + 4;
+                    address = reg_sel[num_src] + (r64->isf.rip + bytelong + *((int32_t*)&ModRM[1]));
+                    consumed += 4;
+                }
+            }
+        }
+
+        if (fisttp == 1) //fild 0x66 0xDB
+        {
+            *(int *)address = fisttpl((double *)address);
+        }
+        else if (fisttp == 2) //fld 0x66 0xDD
+        {
+            *(long long *)address = fisttpq((long double *)address);
+        }
+        else if (fisttp == 3) //fild 0x66 0xDF
+        {
+            *(short *)address = fisttps((float *)address);
+        }
+        else //fisttp = 0
+        {
+            // address is good now, do read and store operands.
+            if(kernel_trap)
+            {
+                if(size_128) ((ssp_m128*)src)->ui = *((__uint128_t*)address);
+                else ((ssp_m64*)src)->u64 = *((uint64_t*)address);
+            }
+            else
+            {
+                //printf("XNU: PTR = %llx, RIP=%llx, RSP=%llx\n", address, r64->isf.rip, reg_sel[4]);
+                if(size_128) copyin(address, (char*)& ((ssp_m128*)src)->ui, 16);
+                else copyin(address, (char*)& ((ssp_m64*)src)->u64, 8);
+            }
         }
     }
     // AnV - Implemented 32-bit fetch
@@ -1029,32 +1084,60 @@ int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *sr
         uint32_t address;
         // DST is always an XMM register. decode for SRC.
         x86_saved_state32_t* r32 = saved_state32(saved_state);
-        uint32_t reg_sel[8] = {r32->eax, r32->ecx, r32->edx,
-            r32->ebx, r32->uesp, r32->ebp,
-            r32->esi, r32->edi};
-
-        if(hsrc) printf("opemu error: high reg ssse\n"); // FIXME
-
-        if (mod == 0)
+        uint32_t reg_sel[8] =
         {
-            if (num_src == 4)
-            {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 reg loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 reg loop
+            r32->eax,  //0
+            r32->ecx,  //1
+            r32->edx,  //2
+            r32->ebx,  //3
+            r32->uesp, //4
+            r32->ebp,  //5
+            r32->esi,  //6
+            r32->edi   //7
+        };
 
-                if(base == 5)
+        if(hdst) printf("opemu error: high reg ssse\n"); // FIXME
+
+        /*** R/M = ESP USE SIB Addressing Modes ***/
+        if (num_src == 4)
+        {
+            uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+            uint8_t scale = *sib >> 6; //SIB Scale field
+            uint8_t base = *sib & 0x7; //SIB Base
+            uint8_t index = (*sib >> 3) & 0x7; //SIB Index
+            uint8_t factor; //Scaling factor
+            if (scale == 0) factor = 1;
+            else if (scale == 1) factor = 2;
+            else if (scale == 2) factor = 4;
+            else if (scale == 3) factor = 8;
+
+            if (mod == 0) //mod field = 00b
+            {
+                if(base == 5) // Base Register = EBP
                 {
-                    //ModRM           0  1  2  3  4  5
-                    //byte   0  1  2  3  4  5  6  7  8
-                    //OPCPDE 0F 38 01 04 05 04 03 02 01
-                    //INS    phaddw mm0, qword [ds:0x1020304+rax]
-                    address = *((uint32_t*)&ModRM[2]) + reg_sel[index];
-                    consumed += 5;
+                    if(index == 4) // Index Register = ESP & Base Register = EBP
+                    {
+                        //ModRM           0  1  2  3  4  5
+                        //byte   0  1  2  3  4  5  6  7  8
+                        //OPCPDE 0F 38 01 04 25 04 03 02 01
+                        //INS    phaddw mm0, qword [ds:0x1020304]
+                        //PTR = DISP32 OFFSET
+                        address = *((uint32_t*)&ModRM[2]);
+                    }
+                    else //base 5 & Not Index 4 
+                    {
+                        //ModRM           0  1  2  3  4  5
+                        //byte   0  1  2  3  4  5  6  7  8
+                        //OPCPDE 0F 38 01 04 05 04 03 02 01
+                        //INS    phaddw mm0, qword [ds:0x1020304+rax]
+                        //PTR = (DISP32 OFFSET) + (INDEX REG * SCALE)
+                        address = *((uint32_t*)&ModRM[2]) + (reg_sel[index] * factor);
+                        consumed += 5;
+                    }
                 }
-                else
+                else //Not Base 5
                 {
-                    if (index == 4)
+                    if (index == 4) // Index Register = ESP
                     {
                         //ModRM           0  1
                         //byte   0  1  2  3  4
@@ -1063,27 +1146,82 @@ int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *sr
                         address = reg_sel[base];
                         consumed++;
                     }
-                    else
+                    else //SIB General Mode
                     {
                         //ModRM           0  1
                         //byte   0  1  2  3  4
                         //OPCPDE 0F 38 01 04 44
                         //INS    phaddw mm0, qword ptr [rsp+rax*2]
-                        address = reg_sel[base] + (reg_sel[index] * (1<<scale));
+                        address = reg_sel[base] + (reg_sel[index] * factor);
                         consumed++;
                     }
                 }
             }
-            else if (num_src == 5)
+            else if (mod == 1) //mod field = 01b
+            {
+                if (index == 4) // Index Register = ESP
+                {
+                    //ModRM           0  1  2
+                    //BYTE   0  1  2  3  4  5
+                    //OPCPDE 0F 38 01 44 27 80
+                    //INS    phaddw mm0, qword ptr [rdi-80h]
+                    //PTR = BASE REG + (DISP8 OFFSET)
+                    address = reg_sel[base] + *((int8_t*)&ModRM[2]);
+                    consumed+= 2;
+                }
+                else //SIB General Mode
+                {
+                    //ModRM           0  1  2
+                    //BYTE   0  1  2  3  4  5
+                    //OPCPDE 0F 38 01 44 44 80
+                    //INS    phaddw mm0, qword ptr [rsp+rax*2-80h]
+                    //PTR = BASE REG + (INDEX REG * SCALE) + (DISP8 OFFSET)
+                    address = reg_sel[base] + (reg_sel[index] * factor) + *((int8_t*)&ModRM[2]);
+                    consumed+= 2;
+                }
+            }
+            else if (mod == 2) //mod field = 10b
+            {
+                if (index == 4) // Index Register = ESP
+                {
+                    //ModRM           0  1  2  3  4  5
+                    //BYTE   0  1  2  3  4  5  6  7  8
+                    //OPCPDE 0F 38 01 84 20 04 03 02 01
+                    //INS    phaddw mm0, qword ptr [rax+1020304h]
+                    //PTR = BASE REG + (DISP32 OFFSET)
+                    address = reg_sel[base] + *((uint32_t*)&ModRM[2]);
+                    consumed += 5;
+                }
+                else //SIB General Mode
+                {
+                    //ModRM           0  1  2  3  4  5
+                    //BYTE   0  1  2  3  4  5  6  7  8
+                    //OPCPDE 0F 38 01 84 44 04 03 02 01
+                    //INS    phaddw mm0, qword ptr [rsp+rax*2+1020304h]
+                    //PTR = BASE REG + (INDEX REG * SCALE) + (DISP32 OFFSET)
+                    address = reg_sel[base] + (reg_sel[index] * factor) + *((uint32_t*)&ModRM[2]);
+                    consumed += 5;
+                }
+            }
+        }
+        /*** R/M = EBP in mod 0 Use Disp32 Offset ***/
+        else if (num_src == 5)
+        {
+            if (mod == 0) //mod field = 00b
             {
                 //ModRM           0  1  2  3  4
                 //BYTE   0  1  2  3  4  5  6  7
                 //OPCPDE 0F 38 01 05 01 02 03 04
                 //INS    phaddw mm0, qword ptr [cs:04030201h]
+                //PTR = DISP32 OFFSET
                 address = *((uint32_t*)&ModRM[1]);
                 consumed += 4;
             }
-            else
+        }
+        /*** General Mode ***/
+        else
+        {
+            if (mod == 0) //mod field = 00b
             {
                 //ModRM           0
                 //BYTE   0  1  2  3
@@ -1091,80 +1229,23 @@ int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *sr
                 //INS    phaddw mm0, qword [ds:rbx]
                 address = reg_sel[num_src];
             }
-        }
-
-        if (mod == 1)
-        {
-            if(num_src == 4)
-            {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 reg loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 reg loop
-
-                if (index == 4)
-                {
-                    //ModRM           0  1  2
-                    //BYTE   0  1  2  3  4  5
-                    //OPCPDE 0F 38 01 44 27 80
-                    //INS    phaddw mm0, qword ptr [rdi-80h]
-                    address = reg_sel[base] + (int8_t)ModRM[2];
-                    consumed+= 2;
-                }
-                else
-                {
-                    //ModRM           0  1  2
-                    //BYTE   0  1  2  3  4  5
-                    //OPCPDE 0F 38 01 44 44 80
-                    //INS    phaddw mm0, qword ptr [rsp+rax*2-80h]
-                    address = reg_sel[base] + (reg_sel[index] * (1<<scale)) + (int8_t)ModRM[2];
-                    consumed+= 2;
-                }
-            }
-            else
+            else if (mod == 1) //mod field = 01b
             {
                 //ModRM           0  1
                 //BYTE   0  1  2  3  4
                 //OPCPDE 0F 38 01 43 01
                 //INS    phaddw mm0, qword [ds:rbx+0x1]
-                address = reg_sel[num_src] + (int8_t)ModRM[1];
+                //PTR = R/M REG + (DISP8 OFFSET)
+                address = reg_sel[num_src] + *((int8_t*)&ModRM[1]);
                 consumed++;
             }
-        }
-
-        if (mod == 2)
-        {
-            if(num_src == 4)
-            {
-                uint8_t scale = ModRM[1] >> 6; //40 byte + 1
-                uint8_t base = ModRM[1] & 0x7; //1 byte + 1 reg loop
-                uint8_t index = (ModRM[1] >> 3) & 0x7; //8 byte + 1 reg loop
-
-                if (index == 4)
-                {
-                    //ModRM           0  1  2  3  4  5
-                    //BYTE   0  1  2  3  4  5  6  7  8
-                    //OPCPDE 0F 38 01 84 20 04 03 02 01
-                    //INS    phaddw mm0, qword ptr [rax+1020304h]
-                    address = reg_sel[base] + *((uint32_t*)&ModRM[2]);
-                    consumed += 5;
-                }
-                else
-                {
-                    //ModRM           0  1  2  3  4  5
-                    //BYTE   0  1  2  3  4  5  6  7  8
-                    //OPCPDE 0F 38 01 84 44 04 03 02 01
-                    //INS    phaddw mm0, qword ptr [rsp+rax*2+1020304h]
-                    address = reg_sel[base] + (reg_sel[index] * (1<<scale)) + *((uint32_t*)&ModRM[2]);
-                    consumed += 5;
-                }
-
-            }
-            else
+            else if (mod == 2) //mod field = 10b
             {
                 //ModRM           0  1  2  3  4
                 //BYTE   0  1  2  3  4  5  6  7
                 //OPCPDE 0F 38 01 83 01 02 03 04
                 //INS    phaddw mm0, qword [ds:rbx+0x4030201]
+                //PTR = R/M REG + (DISP32 OFFSET)
                 address = reg_sel[num_src] + *((uint32_t*)&ModRM[1]);
                 consumed += 4;
             }
@@ -1173,16 +1254,31 @@ int fetchoperands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *sr
         // address is good now, do read and store operands.
         uint64_t addr = address;
 
-        if(kernel_trap)
+        if (fisttp == 1) //fild 0x66 0xDB
         {
-            if(size_128) ((ssp_m128*)src)->ui = *((__uint128_t*)addr);
-            else ((ssp_m64*)src)->u64 = *((uint64_t*)addr);
+            *(int *)addr = fisttpl((double *)addr);
         }
-        else
+        else if (fisttp == 2) //fld 0x66 0xDD
         {
-            //printf("xnu: da = %llx, rsp=%llx,  rip=%llx\n", address, reg_sel[4], r32->eip);
-            if(size_128) copyin(addr, (char*) &((ssp_m128*)src)->ui, 16);
-            else copyin(addr, (char*) &((ssp_m64*)src)->u64, 8);
+            *(long long *)addr = fisttpq((long double *)addr);
+        }
+        else if (fisttp == 3) //fild 0x66 0xDF
+        {
+            *(short *)addr = fisttps((float *)addr);
+        }
+        else //fisttp = 0
+        {
+            if(kernel_trap)
+            {
+                if(size_128) ((ssp_m128*)src)->ui = *((__uint128_t*)addr);
+                else ((ssp_m64*)src)->u64 = *((uint64_t*)addr);
+            }
+            else
+            {
+                //printf("xnu: da = %llx, rsp=%llx,  rip=%llx\n", address, reg_sel[4], r32->eip);
+                if(size_128) copyin(addr, (char*) &((ssp_m128*)src)->ui, 16);
+                else copyin(addr, (char*) &((ssp_m64*)src)->u64, 8);
+            }
         }
     }
     //AnV - Implemented 32-bit fetch END

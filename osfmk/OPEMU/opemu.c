@@ -51,8 +51,10 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
     int longmode;
     longmode = is_saved_state64(state);
 
+    //Enable SSSE3 Soft Emulation
     bytes_skip = ssse3_run(code_buffer, state, longmode, 1);
 
+    //Enable SSE3 Soft Emulation
     if (!bytes_skip)
     {
         bytes_skip = sse3_run(code_buffer, state, longmode, 1);
@@ -75,9 +77,18 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
 
     if(!bytes_skip)
     {
-        uint8_t *ripptr = (uint8_t *)&(saved_state->isf.rip);
-        printf("invalid kernel opcode (64-bit): ");
-        print_bytes(ripptr, 16);
+        uint8_t code0 = code_buffer[0];
+        uint8_t code1 = code_buffer[1];
+        uint8_t code2 = code_buffer[2];
+        uint8_t code3 = code_buffer[3];
+        uint8_t code4 = code_buffer[4];
+        uint8_t code5 = code_buffer[5];
+        uint8_t code6 = code_buffer[6];
+        uint8_t code7 = code_buffer[7];
+        uint8_t code8 = code_buffer[8];
+        uint8_t code9 = code_buffer[9];
+
+        printf("invalid kernel opcode (64-bit): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", code0, code1, code2, code3, code4, code5, code6, code7, code8, code9);
         /* Fall through to trap */
         return 0;
     }
@@ -94,8 +105,10 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
     int longmode;
     longmode = is_saved_state32(state);
 
+    //Enable SSSE3 Soft Emulation
     bytes_skip = ssse3_run(code_buffer, state, longmode, 1);
 
+    //Enable SSE3 Soft Emulation
     if (!bytes_skip)
     {
         bytes_skip = sse3_run(code_buffer, state, longmode, 1);
@@ -118,9 +131,18 @@ unsigned char opemu_ktrap(x86_saved_state_t *state)
 
     if(!bytes_skip)
     {
-        uint8_t *eipptr = (uint8_t *)&(saved_state->eip);
-        printf("invalid kernel opcode (32-bit): ");
-        print_bytes(eipptr, 16);
+        uint8_t code0 = code_buffer[0];
+        uint8_t code1 = code_buffer[1];
+        uint8_t code2 = code_buffer[2];
+        uint8_t code3 = code_buffer[3];
+        uint8_t code4 = code_buffer[4];
+        uint8_t code5 = code_buffer[5];
+        uint8_t code6 = code_buffer[6];
+        uint8_t code7 = code_buffer[7];
+        uint8_t code8 = code_buffer[8];
+        uint8_t code9 = code_buffer[9];
+
+        printf("invalid kernel opcode (32-bit): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", code0, code1, code2, code3, code4, code5, code6, code7, code8, code9);
         /* Fall through to trap */
         return 0;
     }
@@ -179,8 +201,10 @@ void opemu_utrap(x86_saved_state_t *state)
             return;
         }
 
+        //Enable SSSE3 Soft Emulation
         bytes_skip = ssse3_run(code_buffer, state, longmode, 0);
-        
+
+        //Enable SSE3 Soft Emulation
         if (!bytes_skip)
         {
             bytes_skip = sse3_run(code_buffer, state, longmode, 0);
@@ -190,9 +214,18 @@ void opemu_utrap(x86_saved_state_t *state)
 
         if(!bytes_skip)
         {
-            uint8_t *ripptr = (uint8_t *)&(regs->isf.rip);
-            printf("invalid user opcode 64: ");
-            print_bytes(ripptr, 16);
+            uint8_t code0 = code_buffer[0];
+            uint8_t code1 = code_buffer[1];
+            uint8_t code2 = code_buffer[2];
+            uint8_t code3 = code_buffer[3];
+            uint8_t code4 = code_buffer[4];
+            uint8_t code5 = code_buffer[5];
+            uint8_t code6 = code_buffer[6];
+            uint8_t code7 = code_buffer[7];
+            uint8_t code8 = code_buffer[8];
+            uint8_t code9 = code_buffer[9];
+
+            printf("invalid user opcode (64-bit): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", code0, code1, code2, code3, code4, code5, code6, code7, code8, code9);
             /* Fall through to trap */
             return;
         }
@@ -231,8 +264,10 @@ void opemu_utrap(x86_saved_state_t *state)
             return;
         }
 
+        //Enable SSSE3 Soft Emulation
         bytes_skip = ssse3_run(code_buffer, state, longmode, 0);
-        
+
+        //Enable SSE3 Soft Emulation
         if (!bytes_skip)
         {
             bytes_skip = sse3_run(code_buffer, state, longmode, 0);
@@ -242,9 +277,18 @@ void opemu_utrap(x86_saved_state_t *state)
         
         if(!bytes_skip)
         {
-            uint8_t *eipptr = (uint8_t *)&(regs->eip);
-            printf("invalid user opcode 32: ");
-            print_bytes(eipptr, 16);
+            uint8_t code0 = code_buffer[0];
+            uint8_t code1 = code_buffer[1];
+            uint8_t code2 = code_buffer[2];
+            uint8_t code3 = code_buffer[3];
+            uint8_t code4 = code_buffer[4];
+            uint8_t code5 = code_buffer[5];
+            uint8_t code6 = code_buffer[6];
+            uint8_t code7 = code_buffer[7];
+            uint8_t code8 = code_buffer[8];
+            uint8_t code9 = code_buffer[9];
+
+            printf("invalid user opcode (32-bit): %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", code0, code1, code2, code3, code4, code5, code6, code7, code8, code9);
             /* Fall through to trap */
             return;
         }
@@ -268,7 +312,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     int hsreg = 0; //High Source Register Only
 
     // SSE3 Type 1
-    if((*bytep == 0x66 && bytep[1] == 0x0f && bytep[2] != 0x38) || (*bytep == 0x66 && bytep[1] == 0x0f && bytep[2] != 0x3A))
+    if(((*bytep == 0x66) && (bytep[1] == 0x0f) && (bytep[2] != 0x38)) || ((*bytep == 0x66) && (bytep[1] == 0x0f) && (bytep[2] != 0x3A)))
     {
         bytep += 2;
         ins_size += 2;
@@ -296,7 +340,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     // SSE3 Type 2
-    else if(*bytep == 0xF2 && bytep[1] == 0x0f)
+    else if((*bytep == 0xF2) && (bytep[1] == 0x0f))
     {
         bytep += 2;
         ins_size += 2;
@@ -328,7 +372,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     // SSE3 Type 3
-    else if(*bytep == 0xF3 && bytep[1] == 0x0f)
+    else if((*bytep == 0xF3) && (bytep[1] == 0x0f))
     {
         bytep += 2;
         ins_size += 2;
@@ -354,7 +398,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     //SSE3 FISTTP
-    else if ((*bytep == 0x66 && bytep[1] == 0xDB)||(*bytep == 0x66 && bytep[1] == 0xDD)||(*bytep == 0x66 && bytep[1] == 0xDF))
+    else if ((((*bytep == 0x66) && (bytep[1] == 0xDB)))||((*bytep == 0x66) && (bytep[1] == 0xDD))||((*bytep == 0x66) && (bytep[1] == 0xDF)))
     {
         bytep++;
         ins_size += 2;
@@ -381,7 +425,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     //SSE3 monitor/mwait
-    else if(*bytep == 0x0F && bytep[1] == 0x01)
+    else if((*bytep == 0x0F) && (bytep[1] == 0x01))
     {
 
         bytep += 2;
@@ -430,7 +474,7 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
 
     /* REX Prefixes 40-4F Use REX Mode.
      * Use higher registers.
-     * xmm8-15 & R8-R15.
+     * xmm8-15 or R8-R15.
      */
     if((*bytep & 0xF0) == 0x40)
     {
@@ -454,7 +498,7 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
     modbyte++;
 
     /* Two SSSE3 instruction prefixes. */
-    if((*bytep == 0x38 && bytep[1] != 0x0f) || (*bytep == 0x3a && bytep[1] == 0x0f))
+    if(((*bytep == 0x38) && (bytep[1] != 0x0f)) || ((*bytep == 0x3a) && (bytep[1] == 0x0f)))
     {
         uint8_t opcode = bytep[1];
         uint8_t *modrm = &bytep[2];
@@ -489,7 +533,7 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
         if (mod == 3) imm = *((uint8_t*)&bytep[3]); //modrm offset + 1
 */
         ins_size += 2; // not counting modRM byte or anything after.
-        if(*bytep == 0x3a && bytep[1] == 0x0f) modbyte += 4;
+        if((*bytep == 0x3a) && (bytep[1] == 0x0f)) modbyte += 4;
         else modbyte += 3;
 
         if(is_128)
@@ -637,18 +681,31 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
     {
         uint64_t address;
         // DST is always an XMM register. decode for SRC.
+        uint64_t reg_sel[8];
         x86_saved_state64_t *r64 = saved_state64(saved_state);
-        uint64_t reg_sel[8] =
+
+        if (hsrc)
         {
-            r64->rax,     //0
-            r64->rcx,     //1
-            r64->rdx,     //2
-            r64->rbx,     //3
-            r64->isf.rsp, //4
-            r64->rbp,     //5
-            r64->rsi,     //6
-            r64->rdi      //7
-        };
+            reg_sel[0] = r64->r8;
+            reg_sel[1] = r64->r9;
+            reg_sel[2] = r64->r10;
+            reg_sel[3] = r64->r11;
+            reg_sel[4] = r64->r12;
+            reg_sel[5] = r64->r13;
+            reg_sel[6] = r64->r14;
+            reg_sel[7] = r64->r15;
+        }
+        else
+        {
+            reg_sel[0] = r64->rax;
+            reg_sel[1] = r64->rcx;
+            reg_sel[2] = r64->rdx;
+            reg_sel[3] = r64->rbx;
+            reg_sel[4] = r64->isf.rsp;
+            reg_sel[5] = r64->rbp;
+            reg_sel[6] = r64->rsi;
+            reg_sel[7] = r64->rdi;
+        }
 
         /*** DEBUG ***/
         //if(hdst) printf("opemu debug: high Register ssse\n"); // use xmm8-xmm15 register
@@ -656,10 +713,10 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
         /*** REX Prefixes 40-4F Use REX Mode ***/
         if (rex)
         {
-            /*** R/M = RSP USE SIB Addressing Modes ***/
+            /*** R/M = RSP/R12 USE SIB Addressing Modes ***/
             if (num_src == 4)
             {
-                uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+                uint8_t *sib = (uint8_t *)&ModRM[1]; //Second Addressing Modes
                 uint8_t scale = *sib >> 6; //SIB Scale field
                 uint8_t base = *sib & 0x7; //SIB Base
                 uint8_t index = (*sib >> 3) & 0x7; //SIB Index
@@ -882,7 +939,7 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
             /*** R/M = RSP USE SIB Addressing Modes ***/
             if (num_src == 4)
             {
-                uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+                uint8_t *sib = (uint8_t *)&ModRM[1]; //Second Addressing Modes
                 uint8_t scale = *sib >> 6; //SIB Scale field
                 uint8_t base = *sib & 0x7; //SIB Base
                 uint8_t index = (*sib >> 3) & 0x7; //SIB Index
@@ -1081,27 +1138,29 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
     // AnV - Implemented 32-bit fetch
     else
     {
-        uint32_t address;
+        uint64_t address;
         // DST is always an XMM register. decode for SRC.
+        uint64_t reg_sel[8];
         x86_saved_state32_t* r32 = saved_state32(saved_state);
-        uint32_t reg_sel[8] =
+
+        if(hdst)
         {
-            r32->eax,  //0
-            r32->ecx,  //1
-            r32->edx,  //2
-            r32->ebx,  //3
-            r32->uesp, //4
-            r32->ebp,  //5
-            r32->esi,  //6
-            r32->edi   //7
-        };
+            printf("opemu debug: high Register ssse\n"); // use xmm8-xmm15 register
+        }
 
-        if(hdst) printf("opemu error: high reg ssse\n"); // FIXME
-
+        reg_sel[0] = r32->eax;
+        reg_sel[1] = r32->ecx;
+        reg_sel[2] = r32->edx;
+        reg_sel[3] = r32->ebx;
+        reg_sel[4] = r32->uesp;
+        reg_sel[5] = r32->ebp;
+        reg_sel[6] = r32->esi;
+        reg_sel[7] = r32->edi;
+        
         /*** R/M = ESP USE SIB Addressing Modes ***/
         if (num_src == 4)
         {
-            uint8_t *sib = &ModRM[1]; //Second Addressing Modes
+            uint8_t *sib = (uint8_t *)&ModRM[1]; //Second Addressing Modes
             uint8_t scale = *sib >> 6; //SIB Scale field
             uint8_t base = *sib & 0x7; //SIB Base
             uint8_t index = (*sib >> 3) & 0x7; //SIB Index
@@ -1123,6 +1182,7 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
                         //INS    phaddw mm0, qword [ds:0x1020304]
                         //PTR = DISP32 OFFSET
                         address = *((uint32_t*)&ModRM[2]);
+                        consumed += 5;
                     }
                     else //base 5 & Not Index 4 
                     {
@@ -1327,6 +1387,7 @@ void getxmm(ssp_m128 *v, unsigned int i)
         case 7:
             asm __volatile__ ("movdqu %%xmm7, %0" : "=m" (*v->s8));
             break;
+
 #ifdef __x86_64__
         case 8:
             asm __volatile__ ("movdqu %%xmm8, %0" : "=m" (*v->s8));
@@ -1415,6 +1476,7 @@ void movxmm(ssp_m128 *v, unsigned int i)
         case 7:
             asm __volatile__ ("movdqu %0, %%xmm7" :: "m" (*v->s8) );
             break;
+
 #ifdef __x86_64__
         case 8:
             asm __volatile__ ("movdqu %0, %%xmm8" :: "m" (*v->s8) );

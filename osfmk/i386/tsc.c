@@ -553,6 +553,33 @@ tsc_init(void)
             }
             break;
 
+            case 22: /*** AMD AM1 Ext.Family 0x16=22 ***/
+            {
+                uint64_t prfsts = 0;
+                uint64_t cpuFreq = 0;
+                uint64_t cpu_mhz;
+
+                busFreq = Detect_FSB_frequency();
+                prfsts      = rdmsr64(AMD_COFVID_STS);
+                printf("rtclock_init: Athlon's MSR 0x%x \n", AMD_PERF_STS);
+                
+                cpuFreq = EFI_CPU_Frequency();
+                prfsts = getFakeMSR(cpuFreq, busFreq);
+                tscGranularity = (uint32_t)bitfield(prfsts, 44, 40);
+                N_by_2_bus_ratio= (prfsts & bit(46))!=0;
+                
+                /****** Addon boot Argn ******/
+                if (PE_parse_boot_argn("busratio", &tscGranularity, sizeof(tscGranularity)))
+                {
+                    if (tscGranularity == 0) tscGranularity = 1; // avoid div by zero
+                    N_by_2_bus_ratio = (tscGranularity > 30) && ((tscGranularity % 10) != 0);
+                    if (N_by_2_bus_ratio) tscGranularity /= 10; /* Scale it back to normal */
+                }
+                /****** Addon END ******/
+                cpu_mhz = tscGranularity * EFI_FSB_frequency();
+            }
+            break;
+
             default:
             {
                 uint64_t prfsts;

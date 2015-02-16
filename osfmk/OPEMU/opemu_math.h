@@ -1,29 +1,29 @@
 /* Needed unions */
 typedef union
 {
-        float value;
-        uint32_t word;
-    } ieee_float_shape_type;
+	float value;
+	uint32_t word;
+} ieee_float_shape_type;
 
 typedef union
 {
-        double value;
-        struct
-        {
-                uint32_t lsw;
-                uint32_t msw;
-            } parts;
-    } ieee_double_shape_type;
+	double value;
+	struct
+	{
+		uint32_t lsw;
+		uint32_t msw;
+	} parts;
+} ieee_double_shape_type;
 
 typedef union
 {
-        long double value;
-        struct
-        {
-                uint64_t lsw;
-                uint64_t msw;
-            } parts;
-    } ieee_long_double_shape_type;
+	long double value;
+	struct
+	{
+		uint64_t lsw;
+		uint64_t msw;
+	} parts;
+} ieee_long_double_shape_type;
 
 /* 32-bit (float) */
 #define GET_FLOAT_WORD(i,d) \
@@ -73,6 +73,7 @@ typedef union
         qw_u.parts.lsw = (ix1); \
         (d) = qw_u.value; \
       } while (0)
+
 
 float opemu_truncf(float x);
 double opemu_trunc(double x);

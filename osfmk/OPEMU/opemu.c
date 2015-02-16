@@ -298,6 +298,18 @@ void opemu_utrap(x86_saved_state_t *state)
     //EMULATION_FAILED;
 }
 
+/*
+void print_bytes(uint8_t *from, int size)
+{
+    int i;
+    for(i = 0; i < size; ++i)
+    {
+        printf("%02x ", from[i]);
+    }
+    printf("\n");
+}
+*/
+
 /** Runs the sse3 emulator. returns the number of bytes consumed.
  **/
 int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int kernel_trap)
@@ -312,7 +324,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     int hsreg = 0; //High Source Register Only
 
     // SSE3 Type 1
-    if(((*bytep == 0x66) && (bytep[1] == 0x0f) && (bytep[2] != 0x38)) || ((*bytep == 0x66) && (bytep[1] == 0x0f) && (bytep[2] != 0x3A)))
+    if(*bytep == 0x66 && bytep[1] == 0x0f)
     {
         bytep += 2;
         ins_size += 2;
@@ -340,7 +352,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     // SSE3 Type 2
-    else if((*bytep == 0xF2) && (bytep[1] == 0x0f))
+    else if(*bytep == 0xF2 && bytep[1] == 0x0f)
     {
         bytep += 2;
         ins_size += 2;
@@ -372,7 +384,7 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     // SSE3 Type 3
-    else if((*bytep == 0xF3) && (bytep[1] == 0x0f))
+    else if(*bytep == 0xF3 && bytep[1] == 0x0f)
     {
         bytep += 2;
         ins_size += 2;
@@ -398,21 +410,25 @@ int sse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int k
     }
 
     //SSE3 FISTTP
-    else if ((((*bytep == 0x66) && (bytep[1] == 0xDB)))||((*bytep == 0x66) && (bytep[1] == 0xDD))||((*bytep == 0x66) && (bytep[1] == 0xDF)))
+    //else if ((*bytep == 0x66 && bytep[1] == 0xDB)||(*bytep == 0x66 && bytep[1] == 0xDD)||(*bytep == 0x66 && bytep[1] == 0xDF))
+    else if ((*bytep == 0xDB)||(*bytep == 0xDD)||(*bytep == 0xDF))
     {
-        bytep++;
-        ins_size += 2;
-        modbyte += 3;
+        //bytep++;
+        //ins_size += 2;
+        //modbyte += 3;
+
+        ins_size++;
+        modbyte += 2;
 
         switch (*bytep)
         {
-            case 0xDB: //fild 0x66 0xDB
+            case 0xDB: //fild 0xDB
                 fisttp = 1;
                 break;
-            case 0xDD: //fld 0x66 0xDD
+            case 0xDD: //fld 0xDD
                 fisttp = 2;
                 break;
-            case 0xDF: //fild 0x66 0xDF
+            case 0xDF: //fild 0xDF
                 fisttp = 3;
                 break;
         }
@@ -634,16 +650,6 @@ int ssse3_run(uint8_t *instruction, x86_saved_state_t *state, int longmode, int 
     }
 
     return ins_size;
-}
-
-void print_bytes(uint8_t *from, int size)
-{
-    int i;
-    for(i = 0; i < size; ++i)
-    {
-        printf("%02x ", from[i]);
-    }
-    printf("\n");
 }
 
 /* Fetch SSEX operands (except immediate values, which are fetched elsewhere).
@@ -1138,15 +1144,10 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
     // AnV - Implemented 32-bit fetch
     else
     {
-        uint64_t address;
+        uint32_t address;
         // DST is always an XMM register. decode for SRC.
-        uint64_t reg_sel[8];
+        uint32_t reg_sel[8];
         x86_saved_state32_t* r32 = saved_state32(saved_state);
-
-        if(hdst)
-        {
-            printf("opemu debug: high Register ssse\n"); // use xmm8-xmm15 register
-        }
 
         reg_sel[0] = r32->eax;
         reg_sel[1] = r32->ecx;
@@ -1156,7 +1157,9 @@ int operands(uint8_t *ModRM, unsigned int hsrc, unsigned int hdst, void *src, vo
         reg_sel[5] = r32->ebp;
         reg_sel[6] = r32->esi;
         reg_sel[7] = r32->edi;
-        
+
+        if (hsrc) printf("opemu error: high r/m Reg ssse\n"); // FIXME
+
         /*** R/M = ESP USE SIB Addressing Modes ***/
         if (num_src == 4)
         {
@@ -1387,7 +1390,6 @@ void getxmm(ssp_m128 *v, unsigned int i)
         case 7:
             asm __volatile__ ("movdqu %%xmm7, %0" : "=m" (*v->s8));
             break;
-
 #ifdef __x86_64__
         case 8:
             asm __volatile__ ("movdqu %%xmm8, %0" : "=m" (*v->s8));
@@ -1476,7 +1478,6 @@ void movxmm(ssp_m128 *v, unsigned int i)
         case 7:
             asm __volatile__ ("movdqu %0, %%xmm7" :: "m" (*v->s8) );
             break;
-
 #ifdef __x86_64__
         case 8:
             asm __volatile__ ("movdqu %0, %%xmm8" :: "m" (*v->s8) );

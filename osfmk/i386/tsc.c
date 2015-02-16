@@ -148,34 +148,52 @@ EFI_CPU_Frequency(void)
     void		*value;
     unsigned int	size;
 
-    if (DTLookupEntry(0, "/efi/platform", &entry) != kSuccess) {
-        kprintf("EFI_CPU_Frequency: didn't find /efi/platform\n");
-        return 0;
-    }
-    if (DTGetProperty(entry,FSB_CPUFrequency_prop,&value,&size) != kSuccess) {
-        kprintf("EFI_CPU_Frequency: property %s not found\n",
-                FSB_Frequency_prop);
-        return 0;
-    }
-    if (size == sizeof(uint64_t)) {
-        frequency = *(uint64_t *) value;
-        kprintf("EFI_CPU_Frequency: read %s value: %llu\n",
-                FSB_Frequency_prop, frequency);
-        if (!(10*Mega < frequency && frequency < 50*Giga)) {
-            kprintf("EFI_Fake_MSR: value out of range\n");
-            frequency = 0;
+    uint8_t  dummyvar;
+
+    if (PE_parse_boot_argn("-cpuEFI", &dummyvar, sizeof(dummyvar)))
+    {
+        if (DTLookupEntry(0, "/efi/platform", &entry) != kSuccess)
+        {
+            kprintf("EFI_CPU_Frequency: didn't find /efi/platform\n");
+            return 0;
         }
-    } else {
-        kprintf("EFI_CPU_Frequency: unexpected size %d\n", size);
+        if (DTGetProperty(entry,FSB_CPUFrequency_prop,&value,&size) != kSuccess)
+        {
+            kprintf("EFI_CPU_Frequency: property %s not found\n", FSB_Frequency_prop);
+            return 0;
+        }
+        if (size == sizeof(uint64_t))
+        {
+            frequency = *(uint64_t *) value;
+            kprintf("EFI_CPU_Frequency: read %s value: %llu\n", FSB_Frequency_prop, frequency);
+            if (!(10*Mega < frequency && frequency < 50*Giga))
+            {
+                kprintf("EFI_Fake_MSR: value out of range\n");
+                frequency = 0;
+            }
+        }
+        else
+        {
+            kprintf("EFI_CPU_Frequency: unexpected size %d\n", size);
+        }
+        return frequency;
     }
+
+    if(IsAmdCPU())
+    {
+        frequency = cpuRealFreq();
+    }
+    
     return frequency;
+
 }
 
 /*
  * Convert the cpu frequency info into a 'fake' MSR198h in Intel format
  */
 static uint64_t
-getFakeMSR(uint64_t frequency, uint64_t bFreq) {
+getFakeMSR(uint64_t frequency, uint64_t bFreq)
+{
     uint64_t fakeMSR = 0ull;
     uint64_t multi = 0;
 
@@ -427,13 +445,14 @@ tsc_init(void)
     {
         switch (cpuid_info()->cpuid_family)
         {
-            case 15: /*** AMD K8 Ext.Family 0x0f=15  ***/
+            /*** AMD K8 Family ***/
+            case 15: /*** AMD K8 Ext.Family 0x0f=15 ***/
             {
                 uint64_t prfsts = 0;
                 uint64_t cpuFreq = 0;
                 busFreq = Detect_FSB_frequency();
                 prfsts      = rdmsr64(AMD_PERF_STS);
-                printf("rtclock_init: Athlon's MSR 0x%x \n", AMD_PERF_STS);
+                printf("rtclock_init: K8 MSR 0x%x \n", AMD_PERF_STS);
 
                 cpuFreq = EFI_CPU_Frequency();
                 prfsts = getFakeMSR(cpuFreq, busFreq);
@@ -451,13 +470,15 @@ tsc_init(void)
             }
             break;
 
-            case 16: /*** AMD K10 Ext.Family 0x10=16  ***/
+            /*** AMD K10 Family ***/
+            case 16: /*** AMD K10 Ext.Family 0x10=16 ***/
+            case 18: /*** AMD K10 Ext.Family 0x12=18 ***/
             {
                 uint64_t prfsts = 0;
                 uint64_t cpuFreq = 0;
                 busFreq = Detect_FSB_frequency();
                 prfsts      = rdmsr64(AMD_COFVID_STS);
-                printf("rtclock_init: Phenom MSR 0x%x \n ", AMD_COFVID_STS);
+                printf("rtclock_init: K10 MSR 0x%x \n ", AMD_COFVID_STS);
 
                 cpuFreq = EFI_CPU_Frequency();
                 prfsts = getFakeMSR(cpuFreq, busFreq);
@@ -475,58 +496,11 @@ tsc_init(void)
             }
             break;
 
-            case 18:
-            {
-                uint64_t prfsts = 0;
-                uint64_t cpuFreq = 0;
-                busFreq = Detect_FSB_frequency();
-                prfsts      = rdmsr64(AMD_COFVID_STS);
-                printf("rtclock_init: Athlon's MSR 0x%x \n", AMD_PERF_STS);
-
-                cpuFreq = EFI_CPU_Frequency();
-                prfsts = getFakeMSR(cpuFreq, busFreq);
-                tscGranularity = (uint32_t)bitfield(prfsts, 44, 40);
-                N_by_2_bus_ratio= (prfsts & bit(46))!=0;
-
-                /****** Addon boot Argn ******/
-                if (PE_parse_boot_argn("busratio", &tscGranularity, sizeof(tscGranularity)))
-                {
-                    if (tscGranularity == 0) tscGranularity = 1; // avoid div by zero
-                    N_by_2_bus_ratio = (tscGranularity > 30) && ((tscGranularity % 10) != 0);
-                    if (N_by_2_bus_ratio) tscGranularity /= 10; /* Scale it back to normal */
-                }
-                /****** Addon END ******/
-            }
-            break;
-
+            /*** AMD APU Family ***/
+            case 6:  /*** AMD APU Ext.Family 0x6=6 ***/
             case 20: /*** AMD APU Ext.Family 0x14=20 ***/
-            {
-                uint64_t prfsts = 0;
-                uint64_t cpuFreq = 0;
-                uint64_t cpu_mhz;
-
-                busFreq = Detect_FSB_frequency();
-                prfsts      = rdmsr64(AMD_COFVID_STS);
-                printf("rtclock_init: Athlon's MSR 0x%x \n ", AMD_COFVID_STS);
-
-                cpuFreq = EFI_CPU_Frequency();
-                prfsts = getFakeMSR(cpuFreq, busFreq);
-                tscGranularity = (uint32_t)bitfield(prfsts, 44, 40);
-                N_by_2_bus_ratio= (prfsts & bit(46))!=0;
-
-                /****** Addon boot Argn ******/
-                if (PE_parse_boot_argn("busratio", &tscGranularity, sizeof(tscGranularity)))
-                {
-                    if (tscGranularity == 0) tscGranularity = 1; // avoid div by zero
-                    N_by_2_bus_ratio = (tscGranularity > 30) && ((tscGranularity % 10) != 0);
-                    if (N_by_2_bus_ratio) tscGranularity /= 10; /* Scale it back to normal */
-                }
-                /****** Addon END ******/
-                cpu_mhz = tscGranularity * EFI_FSB_frequency();
-            }
-            break;
-
             case 21: /*** AMD A8/A10 Ext.Family 0x15=21 ***/
+            case 22: /*** AMD APU Athlon 5350 Ext.Family 0x16=22 ***/
             {
                 uint64_t prfsts = 0;
                 uint64_t cpuFreq = 0;
@@ -534,40 +508,13 @@ tsc_init(void)
 
                 busFreq = Detect_FSB_frequency();
                 prfsts      = rdmsr64(AMD_COFVID_STS);
-                printf("rtclock_init: Athlon's MSR 0x%x \n", AMD_PERF_STS);
+                printf("rtclock_init: K10.5 MSR 0x%x \n ", AMD_COFVID_STS);
 
                 cpuFreq = EFI_CPU_Frequency();
                 prfsts = getFakeMSR(cpuFreq, busFreq);
                 tscGranularity = (uint32_t)bitfield(prfsts, 44, 40);
                 N_by_2_bus_ratio= (prfsts & bit(46))!=0;
 
-                /****** Addon boot Argn ******/
-                if (PE_parse_boot_argn("busratio", &tscGranularity, sizeof(tscGranularity)))
-                {
-                    if (tscGranularity == 0) tscGranularity = 1; // avoid div by zero
-                    N_by_2_bus_ratio = (tscGranularity > 30) && ((tscGranularity % 10) != 0);
-                    if (N_by_2_bus_ratio) tscGranularity /= 10; /* Scale it back to normal */
-                }
-                /****** Addon END ******/
-                cpu_mhz = tscGranularity * EFI_FSB_frequency();
-            }
-            break;
-
-            case 22: /*** AMD AM1 Ext.Family 0x16=22 ***/
-            {
-                uint64_t prfsts = 0;
-                uint64_t cpuFreq = 0;
-                uint64_t cpu_mhz;
-
-                busFreq = Detect_FSB_frequency();
-                prfsts      = rdmsr64(AMD_COFVID_STS);
-                printf("rtclock_init: Athlon's MSR 0x%x \n", AMD_PERF_STS);
-                
-                cpuFreq = EFI_CPU_Frequency();
-                prfsts = getFakeMSR(cpuFreq, busFreq);
-                tscGranularity = (uint32_t)bitfield(prfsts, 44, 40);
-                N_by_2_bus_ratio= (prfsts & bit(46))!=0;
-                
                 /****** Addon boot Argn ******/
                 if (PE_parse_boot_argn("busratio", &tscGranularity, sizeof(tscGranularity)))
                 {

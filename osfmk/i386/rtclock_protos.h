@@ -40,6 +40,10 @@
 #ifndef _I386_RTCLOCK_PROTOS_H_
 #define _I386_RTCLOCK_PROTOS_H_
 
+extern uint64_t cpuRealFreq(void);
+extern uint64_t timeRDTSC(void);
+extern uint64_t cpuFreq(void);
+
 #define	RTCLOCK_SCALE_UP_BITS	4		/* mercurysquad: Refer to rtclock.c */
 #define	RTCLOCK_SCALE_UP_BY	(1 << RTCLOCK_SCALE_UP_BITS)
 #define	RTCLOCK_SCALE_UP_MASK	(RTCLOCK_SCALE_UP_BY - 1)
